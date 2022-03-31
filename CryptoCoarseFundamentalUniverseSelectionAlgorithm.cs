@@ -50,10 +50,10 @@ namespace QuantConnect.Algorithm.CSharp
 
             foreach (var datum in data)
             {
-                Log($"{datum.Symbol},{datum.Price},{datum.Volume},{datum.DollarVolume},{datum.USDDollarVolume},{datum.Open},{datum.High},{datum.Low},{datum.Close}");
+                Log($"{datum.Symbol},{datum.Price},{datum.Volume},{datum.DollarVolume},{datum.VolumeInBaseCurrency},{datum.Open},{datum.High},{datum.Low},{datum.Close}");
 
                 // define our selection criteria
-                if (datum.Volume >= 100m && datum.USDDollarVolume > 10000m)
+                if (datum.Volume >= 100m && datum.DollarVolume > 10000m)
                 {
                     universe.Add(datum.Symbol);
                 }

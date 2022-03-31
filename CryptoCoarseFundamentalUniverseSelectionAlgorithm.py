@@ -38,10 +38,10 @@ class CryptoCoarseFundamentalUniverseSelectionAlgorithm(QCAlgorithm):
         universe = []
 
         for datum in data:
-            self.Log(f"{datum.Symbol},{datum.Price},{datum.Volume},{datum.DollarVolume},{datum.USDDollarVolume},{datum.Open},{datum.High},{datum.Low},{datum.Close}")
+            self.Log(f"{datum.Symbol},{datum.Price},{datum.Volume},{datum.DollarVolume},{datum.VolumeInBaseCurrency},{datum.Open},{datum.High},{datum.Low},{datum.Close}")
             
             # define our selection criteria
-            if datum.Volume >= 100 and datum.USDDollarVolume > 10000:
+            if datum.Volume >= 100 and datum.DollarVolume > 10000:
                 universe.append(datum.Symbol)
         
         return universe

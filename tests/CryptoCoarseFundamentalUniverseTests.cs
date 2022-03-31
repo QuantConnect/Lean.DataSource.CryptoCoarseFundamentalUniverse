@@ -49,7 +49,7 @@ namespace QuantConnect.DataLibrary.Tests
             var datum = CreateNewSelection();
 
             var expected = from d in datum
-                            where d.Price > 50m && d.DollarVolume > 10000m
+                            where d.Price > 50m && d.VolumeInBaseCurrency > 10000m
                             select d.Symbol;
             var result = new List<Symbol> {Symbol.Create("ETHBUSD", SecurityType.Crypto, Market.Binance)};
 
@@ -77,8 +77,8 @@ namespace QuantConnect.DataLibrary.Tests
             return new CryptoCoarseFundamental
                 {
                     Volume = 20m,
+                    VolumeInBaseCurrency = 200m,
                     DollarVolume = 200m,
-                    USDDollarVolume = 200m,
                     Open = 5m,
                     High = 15m,
                     Low = 4m,
@@ -96,8 +96,8 @@ namespace QuantConnect.DataLibrary.Tests
                 new CryptoCoarseFundamental
                 {
                     Volume = 20m,
+                    VolumeInBaseCurrency = 200m,
                     DollarVolume = 200m,
-                    USDDollarVolume = 200m,
                     Open = 5m,
                     High = 15m,
                     Low = 4m,
@@ -109,8 +109,8 @@ namespace QuantConnect.DataLibrary.Tests
                 new CryptoCoarseFundamental
                 {
                     Volume = 200m,
-                    DollarVolume = 20000m,
-                    USDDollarVolume = 50000m,
+                    VolumeInBaseCurrency = 20000m,
+                    DollarVolume = 50000m,
                     Open = 50m,
                     High = 150m,
                     Low = 40m,

@@ -62,17 +62,18 @@ namespace QuantConnect.DataSource
         public decimal Volume { get; set; }
 
         /// <summary>
-        /// Daily Dollor Volume
+        /// Daily Dollor Volume in base currency of the trading pair
         /// Note that this only includes the volume traded in the selected market
         /// </summary>
         [ProtoMember(16)]
-        public decimal DollarVolume { get; set; }
+        public decimal VolumeInBaseCurrency { get; set; }
 
         /// <summary>
         /// Daily Dollor Volume in USD (or BUSD in Binance exchange)
+        /// Note that this only includes the volume traded in the selected market
         /// </summary>
         [ProtoMember(17)]
-        public decimal? USDDollarVolume { get; set; }
+        public decimal? DollarVolume { get; set; }
 
         /// <summary>
         /// Alias of close price
@@ -129,8 +130,8 @@ namespace QuantConnect.DataSource
                 Time = date - Period,
 
                 Volume = decimal.Parse(csv[2], NumberStyles.Any, CultureInfo.InvariantCulture),
-                DollarVolume = decimal.Parse(csv[3], NumberStyles.Any, CultureInfo.InvariantCulture),
-                USDDollarVolume = !string.IsNullOrEmpty(csv[7]) ? 
+                VolumeInBaseCurrency = decimal.Parse(csv[3], NumberStyles.Any, CultureInfo.InvariantCulture),
+                DollarVolume = !string.IsNullOrEmpty(csv[7]) ? 
                     decimal.Parse(csv[7], NumberStyles.Any, CultureInfo.InvariantCulture) :
                     null,
                 Open = decimal.Parse(csv[4], NumberStyles.Any, CultureInfo.InvariantCulture),
@@ -165,8 +166,8 @@ namespace QuantConnect.DataSource
                 Time = Time,
                 EndTime = EndTime,
                 Volume = Volume,
+                VolumeInBaseCurrency = VolumeInBaseCurrency,
                 DollarVolume = DollarVolume,
-                USDDollarVolume = USDDollarVolume,
                 Open = Open,
                 High = High,
                 Low = Low,
@@ -198,7 +199,7 @@ namespace QuantConnect.DataSource
         /// </summary>
         public override string ToString()
         {
-            return $"{Symbol},{Price},{Volume},{DollarVolume},{USDDollarVolume},{Open},{High},{Low},{Close}";
+            return $"{Symbol},{Price},{Volume},{VolumeInBaseCurrency},{DollarVolume},{Open},{High},{Low},{Close}";
         }
 
         /// <summary>
