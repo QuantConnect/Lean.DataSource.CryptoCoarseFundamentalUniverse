@@ -152,11 +152,11 @@ namespace QuantConnect.DataProcessing
                     {
                         string usdDollorVol;
 
-                        // To USD dollar volume conversion, if <ticker>-USD/BUSD/USDT pair exist
-                        if (dataTicker.Substring(dataTicker.Length - 4) != "USDT" && dataTicker.Substring(dataTicker.Length - 3) != "USD")
+                        // To USD dollar volume conversion, if <ticker>-USD/BUSD/USDT/BTC pair exist
+                        if (dataTicker.Substring(dataTicker.Length - 4, dataTicker.Length - 1) != "USD" && dataTicker.Substring(dataTicker.Length - 3) != "USD")
                         {
                             string refCurrency;
-                            decimal rate = 1m;
+                            decimal rateToUSD = 1m;
 
                             if (coarseByDate.ContainsKey($"{baseCurrency[dataTicker]}USD"))
                             {
@@ -166,12 +166,26 @@ namespace QuantConnect.DataProcessing
                             {
                                 refCurrency = $"{baseCurrency[dataTicker]}BUSD";
                             }
+                            else if (coarseByDate.ContainsKey($"{baseCurrency[dataTicker]}BTC"))
+                            {
+                                rateToUSD = coarseByDate.ContainsKey("BTCUSD") ? 
+                                    decimal.Parse(coarseByDate["BTCUSD"].Split(",").First(), NumberStyles.Any, CultureInfo.InvariantCulture) :
+                                    decimal.Parse(coarseByDate["BTCBUSD"].Split(",").First(), NumberStyles.Any, CultureInfo.InvariantCulture);
+                                refCurrency = $"{baseCurrency[dataTicker]}BTC";
+                            }
                             else if (coarseByDate.ContainsKey($"USDT{baseCurrency[dataTicker]}"))
                             {
-                                rate = coarseByDate.ContainsKey("USDTUSD") ? 
+                                rateToUSD = coarseByDate.ContainsKey("USDTUSD") ? 
                                     decimal.Parse(coarseByDate["USDTUSD"].Split(",").First(), NumberStyles.Any, CultureInfo.InvariantCulture) :
                                     1m / decimal.Parse(coarseByDate["BUSDUSDT"].Split(",").First(), NumberStyles.Any, CultureInfo.InvariantCulture);
                                 refCurrency = $"USDT{baseCurrency[dataTicker]}";
+                            }
+                            else if (coarseByDate.ContainsKey($"USDC{baseCurrency[dataTicker]}"))
+                            {
+                                rateToUSD = coarseByDate.ContainsKey("USDCUSD") ? 
+                                    decimal.Parse(coarseByDate["USDCUSD"].Split(",").First(), NumberStyles.Any, CultureInfo.InvariantCulture) :
+                                    1m / decimal.Parse(coarseByDate["BUSDUSDC"].Split(",").First(), NumberStyles.Any, CultureInfo.InvariantCulture);
+                                refCurrency = $"USDC{baseCurrency[dataTicker]}";
                             }
                             else
                             {
@@ -179,9 +193,9 @@ namespace QuantConnect.DataProcessing
                             }
 
                             var conversionRate = decimal.Parse(coarseByDate[refCurrency].Split(",").First(), NumberStyles.Any, CultureInfo.InvariantCulture);
-                            conversionRate = refCurrency.Substring(0, 4) == "USDT" ? 1m / conversionRate : conversionRate;
+                            conversionRate = refCurrency.Substring(0, 3) == "USD" ? 1m / conversionRate : conversionRate;
                             var baseDollarVol = decimal.Parse(coarseByDate[dataTicker].Split(",")[2], NumberStyles.Any, CultureInfo.InvariantCulture);
-                            usdDollorVol = $"{baseDollarVol * conversionRate * rate}";
+                            usdDollorVol = $"{baseDollarVol * conversionRate * rateToUSD}";
                         }
                         else
                         {
