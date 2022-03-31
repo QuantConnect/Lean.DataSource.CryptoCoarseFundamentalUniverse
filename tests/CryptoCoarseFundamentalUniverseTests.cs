@@ -16,18 +16,21 @@
 
 using System;
 using ProtoBuf;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using ProtoBuf.Meta;
 using Newtonsoft.Json;
+using NodaTime;
 using NUnit.Framework;
 using QuantConnect.Data;
 using QuantConnect.DataSource;
+using QuantConnect.Data.Market;
 
 namespace QuantConnect.DataLibrary.Tests
 {
     [TestFixture]
-    public class MyCustomDataTypeTests
+    public class CryptoCoarseFundamentalTests
     {
         [Test]
         public void JsonRoundTrip()
@@ -41,30 +44,14 @@ namespace QuantConnect.DataLibrary.Tests
         }
 
         [Test]
-        public void ProtobufRoundTrip()
+        public void Selection()
         {
-            var expected = CreateNewInstance();
-            var type = expected.GetType();
+            var datum = CreateNewSelection();
 
-            RuntimeTypeModel.Default[typeof(BaseData)].AddSubType(2000, type);
-
-            using (var stream = new MemoryStream())
-            {
-                Serializer.Serialize(stream, expected);
-
-                stream.Position = 0;
-
-                var result = Serializer.Deserialize(type, stream);
-
-                AssertAreEqual(expected, result, filterByCustomAttributes: true);
-            }
-        }
-
-        [Test]
-        public void Clone()
-        {
-            var expected = CreateNewInstance();
-            var result = expected.Clone();
+            var expected = from d in datum
+                            where d.Price > 50m && d.DollarVolume > 10000m
+                            select d.Symbol;
+            var result = new List<Symbol> {Symbol.Create("ETHBUSD", SecurityType.Crypto, Market.Binance)};
 
             AssertAreEqual(expected, result);
         }
@@ -87,12 +74,51 @@ namespace QuantConnect.DataLibrary.Tests
 
         private BaseData CreateNewInstance()
         {
-            return new MyCustomDataType
+            return new CryptoCoarseFundamental
+                {
+                    Volume = 20m,
+                    DollarVolume = 200m,
+                    USDDollarVolume = 200m,
+                    Open = 5m,
+                    High = 15m,
+                    Low = 4m,
+                    Close = 10m,
+
+                    Symbol = Symbol.Create("BTCBUSD", SecurityType.Crypto, Market.Binance),
+                    Time = DateTime.Today
+                };
+        }
+
+        private IEnumerable<CryptoCoarseFundamental> CreateNewSelection()
+        {
+            return new []
             {
-                Symbol = Symbol.Empty,
-                Time = DateTime.Today,
-                DataType = MarketDataType.Base,
-                SomeCustomProperty = "This is some market related information"
+                new CryptoCoarseFundamental
+                {
+                    Volume = 20m,
+                    DollarVolume = 200m,
+                    USDDollarVolume = 200m,
+                    Open = 5m,
+                    High = 15m,
+                    Low = 4m,
+                    Close = 10m,
+
+                    Symbol = Symbol.Create("BTCBUSD", SecurityType.Crypto, Market.Binance),
+                    Time = DateTime.Today
+                },
+                new CryptoCoarseFundamental
+                {
+                    Volume = 200m,
+                    DollarVolume = 20000m,
+                    USDDollarVolume = 50000m,
+                    Open = 50m,
+                    High = 150m,
+                    Low = 40m,
+                    Close = 100m,
+
+                    Symbol = Symbol.Create("ETHBUSD", SecurityType.Crypto, Market.Binance),
+                    Time = DateTime.Today
+                }
             };
         }
     }

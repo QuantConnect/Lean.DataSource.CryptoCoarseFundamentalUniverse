@@ -16,7 +16,7 @@ from AlgorithmImports import *
 ### <summary>
 ### Example algorithm using the custom data type as a source of alpha
 ### </summary>
-class CustomDataUniverse(QCAlgorithm): 
+class CryptoCoarseFundamentalUniverseSelectionAlgorithm(QCAlgorithm): 
     def Initialize(self):
         ''' Initialise the data and resolution required, as well as the cash and start-end dates for your algorithm. All algorithms must initialized. '''
 
@@ -27,20 +27,24 @@ class CustomDataUniverse(QCAlgorithm):
         self.SetEndDate(2022, 2, 18)
         self.SetCash(100000)
 
-        # add a custom universe data source (defaults to usa-equity)
-        self.AddUniverse(MyCustomDataUniverseType, "MyCustomDataUniverseType", Resolution.Daily, self.UniverseSelection)
+        # Add universe selection of cryptos based on coarse fundamentals
+        self.AddUniverse(CryptoCoarseFundamentalUniverse(Market.Binance, self.UniverseSettings, self.UniverseSelectionFilter))
 
-    def UniverseSelection(self, data):
+    def UniverseSelectionFilter(self, data):
         ''' Selected the securities
         
-        :param List of MyCustomUniverseType data: List of MyCustomUniverseType
+        :param List of CryptoCoarseFundamentalUniverse data: List of CryptoCoarseFundamentalUniverse
         :return: List of Symbol objects '''
+        universe = []
 
         for datum in data:
-            self.Log(f"{datum.Symbol},{datum.Followers},{datum.DayPercentChange},{datum.WeekPercentChange}")
+            self.Log(f"{datum.Symbol},{datum.Price},{datum.Volume},{datum.DollarVolume},{datum.USDDollarVolume},{datum.Open},{datum.High},{datum.Low},{datum.Close}")
+            
+            # define our selection criteria
+            if datum.Volume >= 100 and datum.USDDollarVolume > 10000:
+                universe.append(datum.Symbol)
         
-        # define our selection criteria
-        return [d.Symbol for d in data if d.SomeCustomProperty == 'buy']
+        return universe
 
     def OnSecuritiesChanged(self, changes):
         ''' Event fired each time that we add/remove securities from the data feed

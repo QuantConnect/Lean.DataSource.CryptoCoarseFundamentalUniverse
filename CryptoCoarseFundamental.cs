@@ -15,25 +15,69 @@
 */
 
 using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using NodaTime;
 using ProtoBuf;
-using System.IO;
 using QuantConnect.Data;
-using System.Collections.Generic;
 
 namespace QuantConnect.DataSource
 {
     /// <summary>
-    /// Example custom data type
+    /// Crypto Coarse Fundamental object for crpyto universe selection
     /// </summary>
     [ProtoContract(SkipConstructor = true)]
-    public class MyCustomDataType : BaseData
+    public class CryptoCoarseFundamental : BaseData
     {
         /// <summary>
-        /// Some custom data property
+        /// Daily Open Price (UTC 00:00)
         /// </summary>
-        [ProtoMember(2000)]
-        public string SomeCustomProperty { get; set; }
+        [ProtoMember(11)]
+        public decimal Open { get; set; }
+
+        /// <summary>
+        /// Daily High Price
+        /// </summary>
+        [ProtoMember(12)]
+        public decimal High { get; set; }
+
+        /// <summary>
+        /// Daily Low Price
+        /// </summary>
+        [ProtoMember(13)]
+        public decimal Low { get; set; }
+
+        /// <summary>
+        /// Daily Close Price
+        /// </summary>
+        [ProtoMember(14)]
+        public decimal Close { get; set; }
+
+        /// <summary>
+        /// Daily Trade Volume
+        /// Note that this only includes the volume traded in the selected market
+        /// </summary>
+        [ProtoMember(15)]
+        public decimal Volume { get; set; }
+
+        /// <summary>
+        /// Daily Dollor Volume
+        /// Note that this only includes the volume traded in the selected market
+        /// </summary>
+        [ProtoMember(16)]
+        public decimal DollarVolume { get; set; }
+
+        /// <summary>
+        /// Daily Dollor Volume in USD (or BUSD in Binance exchange)
+        /// </summary>
+        [ProtoMember(17)]
+        public decimal? USDDollarVolume { get; set; }
+
+        /// <summary>
+        /// Alias of close price
+        /// </summary>
+        public decimal Price => Close;
 
         /// <summary>
         /// Time passed between the date of the data and the time the data became available to us
@@ -57,9 +101,11 @@ namespace QuantConnect.DataSource
             return new SubscriptionDataSource(
                 Path.Combine(
                     Globals.DataFolder,
-                    "alternative",
-                    "mycustomdatatype",
-                    $"{config.Symbol.Value.ToLowerInvariant()}.csv"
+                    "crypto",
+                    config.Market.ToLowerInvariant(),
+                    "fundamental",
+                    "coarse",
+                    $"{date:yyyyMMdd}.csv"
                 ),
                 SubscriptionTransportMedium.LocalFile
             );
@@ -77,13 +123,34 @@ namespace QuantConnect.DataSource
         {
             var csv = line.Split(',');
 
-            var parsedDate = Parse.DateTimeExact(csv[0], "yyyyMMdd");
-            return new MyCustomDataType
+            return new CryptoCoarseFundamental
             {
-                Symbol = config.Symbol,
-                SomeCustomProperty = csv[1],
-                Time = parsedDate - Period,
+                Symbol = Symbol.Create(csv[0], SecurityType.Crypto, config.Market),
+                Time = date - Period,
+
+                Volume = decimal.Parse(csv[2], NumberStyles.Any, CultureInfo.InvariantCulture),
+                DollarVolume = decimal.Parse(csv[3], NumberStyles.Any, CultureInfo.InvariantCulture),
+                USDDollarVolume = !string.IsNullOrEmpty(csv[7]) ? 
+                    decimal.Parse(csv[7], NumberStyles.Any, CultureInfo.InvariantCulture) :
+                    null,
+                Open = decimal.Parse(csv[4], NumberStyles.Any, CultureInfo.InvariantCulture),
+                High = decimal.Parse(csv[5], NumberStyles.Any, CultureInfo.InvariantCulture),
+                Low = decimal.Parse(csv[6], NumberStyles.Any, CultureInfo.InvariantCulture),
+                Close = decimal.Parse(csv[1], NumberStyles.Any, CultureInfo.InvariantCulture)
             };
+        }
+
+        /// <summary>
+        /// Creates the symbol used for crypto coarse fundamental data
+        /// </summary>
+        /// <param name="market">The market</param>
+        /// <returns>A crypto coarse universe symbol</returns>
+        public static Symbol CreateUniverseSymbol(string market)
+        {
+            var ticker = $"crypto-coarse-{Guid.NewGuid()}";
+            var sid = SecurityIdentifier.GenerateCrypto(ticker, market);
+
+            return new Symbol(sid, ticker);
         }
 
         /// <summary>
@@ -92,12 +159,18 @@ namespace QuantConnect.DataSource
         /// <returns>A clone of the object</returns>
         public override BaseData Clone()
         {
-            return new MyCustomDataType
+            return new CryptoCoarseFundamental
             {
                 Symbol = Symbol,
                 Time = Time,
                 EndTime = EndTime,
-                SomeCustomProperty = SomeCustomProperty,
+                Volume = Volume,
+                DollarVolume = DollarVolume,
+                USDDollarVolume = USDDollarVolume,
+                Open = Open,
+                High = High,
+                Low = Low,
+                Close = Close
             };
         }
 
@@ -107,7 +180,7 @@ namespace QuantConnect.DataSource
         /// <returns>false</returns>
         public override bool RequiresMapping()
         {
-            return true;
+            return false;
         }
 
         /// <summary>
@@ -117,7 +190,7 @@ namespace QuantConnect.DataSource
         /// <returns>true</returns>
         public override bool IsSparseData()
         {
-            return true;
+            return false;
         }
 
         /// <summary>
@@ -125,7 +198,7 @@ namespace QuantConnect.DataSource
         /// </summary>
         public override string ToString()
         {
-            return $"{Symbol} - {SomeCustomProperty}";
+            return $"{Symbol},{Price},{Volume},{DollarVolume},{USDDollarVolume},{Open},{High},{Low},{Close}";
         }
 
         /// <summary>

@@ -15,6 +15,7 @@
 */
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using QuantConnect.Data;
 using QuantConnect.Data.UniverseSelection;
@@ -25,7 +26,7 @@ namespace QuantConnect.Algorithm.CSharp
     /// <summary>
     /// Example algorithm using the custom data type as a source of alpha
     /// </summary>
-    public class CustomDataUniverse : QCAlgorithm
+    public class CryptoCoarseFundamentalUniverseSelectionAlgorithm : QCAlgorithm
     {
         /// <summary>
         /// Initialise the data and resolution required, as well as the cash and start-end dates for your algorithm. All algorithms must initialized.
@@ -35,23 +36,30 @@ namespace QuantConnect.Algorithm.CSharp
             // Data ADDED via universe selection is added with Daily resolution.
             UniverseSettings.Resolution = Resolution.Daily;
 
-            SetStartDate(2022, 2, 14);
-            SetEndDate(2022, 2, 18);
+            SetStartDate(2017, 2, 14);
+            SetEndDate(2017, 2, 18);
             SetCash(100000);
 
-            // add a custom universe data source (defaults to usa-equity)
-            AddUniverse<MyCustomDataUniverseType>("MyCustomDataUniverseType", Resolution.Daily, data =>
+            // Add universe selection of cryptos based on coarse fundamentals
+            AddUniverse(new CryptoCoarseFundamentalUniverse(Market.Binance, UniverseSettings, UniverseSelectionFilter));
+        }
+
+        private IEnumerable<Symbol> UniverseSelectionFilter(IEnumerable<CryptoCoarseFundamental> data)
+        {
+            var universe = new List<Symbol>();
+
+            foreach (var datum in data)
             {
-                foreach (var datum in data)
-                {
-                    Log($"{datum.Symbol},{datum.SomeCustomProperty},{datum.SomeNumericProperty}");
-                }
+                Log($"{datum.Symbol},{datum.Price},{datum.Volume},{datum.DollarVolume},{datum.USDDollarVolume},{datum.Open},{datum.High},{datum.Low},{datum.Close}");
 
                 // define our selection criteria
-                return from d in data
-                       where d.SomeCustomProperty == "buy"
-                       select d.Symbol;
-            });
+                if (datum.Volume >= 100m && datum.USDDollarVolume > 10000m)
+                {
+                    universe.Add(datum.Symbol);
+                }
+            }
+
+            return universe;
         }
 
         /// <summary>

@@ -4,8 +4,8 @@
     <RootNamespace>QuantConnect.DataLibrary.Tests</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="..\Demonstration.cs" Link="Demonstration.cs" />
-    <Compile Include="..\DemonstrationUniverse.cs" Link="DemonstrationUniverse.cs" />
+    <Compile Include="..\CryptoCoarseFundamentalUniverseSelectionAlgorithm.cs" Link="CryptoCoarseFundamentalUniverseSelectionAlgorithm.cs" />
+    <Content Include="..\CryptoCoarseFundamentalUniverseSelectionAlgorithm.py" Link="CryptoCoarseFundamentalUniverseSelectionAlgorithm.py" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="protobuf-net" Version="3.0.29" />
