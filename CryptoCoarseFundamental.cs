@@ -83,12 +83,12 @@ namespace QuantConnect.DataSource
         /// <summary>
         /// Time passed between the date of the data and the time the data became available to us
         /// </summary>
-        public TimeSpan Period { get; set; } = TimeSpan.FromDays(1);
+        private TimeSpan _period = TimeSpan.FromDays(1);
 
         /// <summary>
         /// Time the data became available
         /// </summary>
-        public override DateTime EndTime => Time + Period;
+        public override DateTime EndTime => Time + _period;
 
         /// <summary>
         /// Return the URL string source of the file. This will be converted to a stream
@@ -126,18 +126,18 @@ namespace QuantConnect.DataSource
 
             return new CryptoCoarseFundamental
             {
-                Symbol = Symbol.Create(csv[0], SecurityType.Crypto, config.Market),
-                Time = date - Period,
+                Symbol = new Symbol(SecurityIdentifier.Parse(csv[0]), csv[1]),
+                Time = date - _period,
 
-                Volume = decimal.Parse(csv[2], NumberStyles.Any, CultureInfo.InvariantCulture),
-                VolumeInBaseCurrency = decimal.Parse(csv[3], NumberStyles.Any, CultureInfo.InvariantCulture),
-                DollarVolume = !string.IsNullOrEmpty(csv[7]) ? 
-                    decimal.Parse(csv[7], NumberStyles.Any, CultureInfo.InvariantCulture) :
+                Volume = decimal.Parse(csv[3], NumberStyles.Any, CultureInfo.InvariantCulture),
+                VolumeInBaseCurrency = decimal.Parse(csv[4], NumberStyles.Any, CultureInfo.InvariantCulture),
+                DollarVolume = !string.IsNullOrEmpty(csv[8]) ? 
+                    decimal.Parse(csv[8], NumberStyles.Any, CultureInfo.InvariantCulture) :
                     null,
-                Open = decimal.Parse(csv[4], NumberStyles.Any, CultureInfo.InvariantCulture),
-                High = decimal.Parse(csv[5], NumberStyles.Any, CultureInfo.InvariantCulture),
-                Low = decimal.Parse(csv[6], NumberStyles.Any, CultureInfo.InvariantCulture),
-                Close = decimal.Parse(csv[1], NumberStyles.Any, CultureInfo.InvariantCulture)
+                Open = decimal.Parse(csv[5], NumberStyles.Any, CultureInfo.InvariantCulture),
+                High = decimal.Parse(csv[6], NumberStyles.Any, CultureInfo.InvariantCulture),
+                Low = decimal.Parse(csv[7], NumberStyles.Any, CultureInfo.InvariantCulture),
+                Close = decimal.Parse(csv[2], NumberStyles.Any, CultureInfo.InvariantCulture)
             };
         }
 

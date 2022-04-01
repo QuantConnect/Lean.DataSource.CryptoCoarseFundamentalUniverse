@@ -33,6 +33,7 @@ namespace QuantConnect.DataProcessing
         /// <returns>Exit code. 0 equals successful, and any other value indicates the converter failed.</returns>
         public static void Main(string[] args)
         {
+            args = new string[] {"--market=binance", "--from-date=2010-01-01"};
             var optionsObject = ToolboxArgumentParser.ParseArguments(args);
             if (optionsObject.Count == 0)
             {

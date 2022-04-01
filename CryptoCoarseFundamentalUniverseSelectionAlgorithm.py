@@ -26,6 +26,8 @@ class CryptoCoarseFundamentalUniverseSelectionAlgorithm(QCAlgorithm):
         self.SetStartDate(2022, 2, 14)
         self.SetEndDate(2022, 2, 18)
         self.SetCash(100000)
+        
+        self.SetBrokerageModel(BrokerageName.Binance, AccountType.Cash)
 
         # Add universe selection of cryptos based on coarse fundamentals
         self.AddUniverse(CryptoCoarseFundamentalUniverse(Market.Binance, self.UniverseSettings, self.UniverseSelectionFilter))

@@ -17,6 +17,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using QuantConnect.Brokerages;
 using QuantConnect.Data;
 using QuantConnect.Data.UniverseSelection;
 using QuantConnect.DataSource;
@@ -39,6 +40,8 @@ namespace QuantConnect.Algorithm.CSharp
             SetStartDate(2017, 2, 14);
             SetEndDate(2017, 2, 18);
             SetCash(100000);
+
+            SetBrokerageModel(BrokerageName.Binance, AccountType.Cash);
 
             // Add universe selection of cryptos based on coarse fundamentals
             AddUniverse(new CryptoCoarseFundamentalUniverse(Market.Binance, UniverseSettings, UniverseSelectionFilter));
