@@ -143,7 +143,17 @@ namespace QuantConnect.DataProcessing
 
                     foreach (var dataTicker in coarseByDate.Keys.ToList())
                     {
-                        var usdDollarVol = GetUSDDollarVolume(coarseByDate, baseCurrency, dataTicker);
+                        decimal? usdDollarVol;
+                        
+                        // In case there might be missing data
+                        try
+                        {
+                            usdDollarVol = GetUSDDollarVolume(coarseByDate, baseCurrency, dataTicker);
+                        }
+                        catch
+                        {
+                            usdDollarVol = null;
+                        }
 
                         _dataByDate[fileName][dataTicker].Add(usdDollarVol);
                     }
