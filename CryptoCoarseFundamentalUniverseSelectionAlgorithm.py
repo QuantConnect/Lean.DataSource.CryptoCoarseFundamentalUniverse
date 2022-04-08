@@ -37,16 +37,8 @@ class CryptoCoarseFundamentalUniverseSelectionAlgorithm(QCAlgorithm):
         
         :param List of CryptoCoarseFundamentalUniverse data: List of CryptoCoarseFundamentalUniverse
         :return: List of Symbol objects '''
-        universe = []
-
-        for datum in data:
-            self.Log(f"{datum.Symbol},{datum.Price},{datum.Volume},{datum.DollarVolume},{datum.VolumeInBaseCurrency},{datum.Open},{datum.High},{datum.Low},{datum.Close}")
-            
-            # define our selection criteria
-            if datum.Volume >= 100 and datum.DollarVolume > 10000:
-                universe.append(datum.Symbol)
-        
-        return universe
+        return [datum.Symbol for datum in data
+                if datum.Volume >= 100 and datum.DollarVolume > 10000]
 
     def OnSecuritiesChanged(self, changes):
         ''' Event fired each time that we add/remove securities from the data feed

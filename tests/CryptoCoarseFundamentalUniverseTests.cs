@@ -24,6 +24,7 @@ using Newtonsoft.Json;
 using NodaTime;
 using NUnit.Framework;
 using QuantConnect.Data;
+using QuantConnect.DataProcessing;
 using QuantConnect.DataSource;
 using QuantConnect.Data.Market;
 
@@ -32,6 +33,15 @@ namespace QuantConnect.DataLibrary.Tests
     [TestFixture]
     public class CryptoCoarseFundamentalTests
     {
+        private static IEnumerable<object[]> TestCases()
+        {
+            yield return new object[] {Market.Kraken, new Dictionary<string, List<decimal?>>{{"BTCUSD", new List<decimal?>{100m,0.01m,1m}}}, new Dictionary<string, string>{{"BTCUSD","USD"}}, "BTCUSD", 100m};
+            yield return new object[] {Market.GDAX, new Dictionary<string, List<decimal?>>{{"ETHBTC", new List<decimal?>{100m,0.1m,10m}}, {"BTCUSD", new List<decimal?>{10m,null,1m}}}, new Dictionary<string, string>{{"ETHBTC","BTC"}, {"BTCUSD","USD"}}, "ETHBTC", 10000m};
+            yield return new object[] {Market.Bitfinex, new Dictionary<string, List<decimal?>>{{"BTCXRP", new List<decimal?>{100m,null,1m}}, {"USDTXRP", new List<decimal?>{10m,0.1m,1m}}, {"USDTUSD", new List<decimal?>{1m,1m,1m}}}, new Dictionary<string, string>{{"BTCXRP","XPR"}, {"USDTXRP","XRP"}, {"USDTUSD","USD"}}, "BTCXRP", 10m};
+            yield return new object[] {Market.Binance, new Dictionary<string, List<decimal?>>{{"MATICBUSD", new List<decimal?>{100m,10m,1000m}}}, new Dictionary<string, string>{{"MATICBUSD","BUSD"}}, "MATICBUSD", 1000m};
+            yield return new object[] {Market.FTX, new Dictionary<string, List<decimal?>>{{"SOLLTC", new List<decimal?>{1m,0.1m,0.1m}}, {"LTCBTC", new List<decimal?>{10m,0.1m,1m}}, {"BTCUSD", new List<decimal?>{10m,0m,0m}}}, new Dictionary<string, string>{{"SOLLTC","LTC"}, {"LTCBTC","BTC"}, {"BTCUSD","USD"}}, "SOLLTC", 10m};
+        }
+
         [Test]
         public void JsonRoundTrip()
         {
@@ -52,6 +62,17 @@ namespace QuantConnect.DataLibrary.Tests
                             where d.Price > 50m && d.VolumeInBaseCurrency > 10000m
                             select d.Symbol;
             var result = new List<Symbol> {Symbol.Create("ETHBUSD", SecurityType.Crypto, Market.Binance)};
+
+            AssertAreEqual(expected, result);
+        }
+
+        [Test, TestCaseSource("TestCases")]
+        public void GetUSDDollarVolumeTest(string market, Dictionary<string, List<decimal?>> coarseByDate, Dictionary<string, string> baseCurrency, string dataTicker, decimal expected)
+        {
+            // Convertor instance setting won't matter
+            var convertor = new CryptoCoarseFundamentalUniverseDataConverter(market, Globals.DataFolder, new DateTime(2020, 1, 1), new DateTime(2020, 2, 1));
+
+            var result = convertor.GetUSDDollarVolume(coarseByDate, baseCurrency, dataTicker);
 
             AssertAreEqual(expected, result);
         }

@@ -49,20 +49,9 @@ namespace QuantConnect.Algorithm.CSharp
 
         private IEnumerable<Symbol> UniverseSelectionFilter(IEnumerable<CryptoCoarseFundamental> data)
         {
-            var universe = new List<Symbol>();
-
-            foreach (var datum in data)
-            {
-                Log($"{datum.Symbol},{datum.Price},{datum.Volume},{datum.DollarVolume},{datum.VolumeInBaseCurrency},{datum.Open},{datum.High},{datum.Low},{datum.Close}");
-
-                // define our selection criteria
-                if (datum.Volume >= 100m && datum.DollarVolume > 10000m)
-                {
-                    universe.Add(datum.Symbol);
-                }
-            }
-
-            return universe;
+            return from datum in data
+                where datum.Volume >= 100m && datum.DollarVolume > 10000m
+                select datum.Symbol;
         }
 
         /// <summary>

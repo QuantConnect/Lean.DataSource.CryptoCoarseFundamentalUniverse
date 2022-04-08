@@ -23,9 +23,11 @@ using System.Linq;
 using System.Net;
 using QuantConnect;
 using QuantConnect.Configuration;
+using QuantConnect.Data.Market;
 using QuantConnect.DataSource;
 using QuantConnect.Logging;
 using QuantConnect.Util;
+using QuantConnect.ToolBox;
 
 namespace QuantConnect.DataProcessing
 {
@@ -41,7 +43,7 @@ namespace QuantConnect.DataProcessing
         private readonly DateTime _fromDate;
         private readonly DateTime _toDate;
 
-        private Dictionary<string, Dictionary<string, string>> dataByDate = new();
+        private Dictionary<string, Dictionary<string, List<decimal?>>> _dataByDate = new();
 
         /// <summary>
         /// Creates a new instance of <see cref="CryptoCoarseFundamental"/>
@@ -68,16 +70,17 @@ namespace QuantConnect.DataProcessing
         {
             try
             {
-                // Get base currency for reference of USD dollar volume conversion
                 var baseCurrency = new Dictionary<string, string>();
 
-                var symbolProperties = ReadOnlineDocumentLines("https://raw.githubusercontent.com/QuantConnect/Lean/master/Data/symbol-properties/symbol-properties-database.csv");
+                var symbolProperties = Extensions.DownloadData("https://raw.githubusercontent.com/QuantConnect/Lean/master/Data/symbol-properties/symbol-properties-database.csv")
+                    .Split("\n");
                 foreach (var line in symbolProperties)
                 {
                     var lineItem = line.Split(",");
                     if (lineItem.First() == _market)
                     {
-                        baseCurrency[lineItem[1]] = lineItem[4];
+                        CurrencyPairUtil.DecomposeCurrencyPair(Symbol.Create(lineItem[1], SecurityType.Crypto, _market), out var __, out var quoteCurrency);
+                        baseCurrency[lineItem[1]] = quoteCurrency;
                     }
                 }
 
@@ -91,136 +94,66 @@ namespace QuantConnect.DataProcessing
 
                 foreach (var fileString in files)
                 {
-                    // Fetch price data from zip files
-                    using (ZipArchive zip = ZipFile.Open(fileString, ZipArchiveMode.Read))
+                    var dataReader = new LeanDataReader(fileString);
+                    var baseData = dataReader.Parse();
+
+                    string name = fileString.Split("\\").Last().Split("_").First().ToUpper();
+
+                    foreach (TradeBar data in baseData)
                     {
-                        foreach (ZipArchiveEntry entry in zip.Entries)
+                        var dateTime = data.EndTime;
+                        if (dateTime < _fromDate || dateTime > _toDate)
                         {
-                            string name = entry.Name.Split(".").First().ToUpper();
+                            continue;
+                        }
 
-                            var streamFile = entry.Open();
-                            var lines = ReadLines(streamFile);
+                        var date = $"{dateTime:yyyyMMdd}";
+                        var high = data.High;
+                        var low = data.Low;
+                        var price = data.Close;
+                        var volume = data.Volume;
+                        var dollarVolume = price * volume;
 
-                            foreach (var line in lines)
-                            {
-                                var csv = line.Split(",");
-                                var dateTime = Parse.DateTimeExact(csv[0].Split(" ").First(), "yyyyMMdd");
-                                if (dateTime < _fromDate || dateTime > _toDate)
-                                {
-                                    continue;
-                                }
+                        var content = new Dictionary<string, List<decimal?>>();
+                        _dataByDate.TryAdd(date, content);
+                        if (_dataByDate[date].TryGetValue(name, out var temp))
+                        {
+                            var oldVolume = temp[1];
+                            var oldDollarVolume = temp[2];
+                            var oldHigh = temp[4];
+                            var oldLow = temp[5];
 
-                                var date = $"{dateTime:yyyyMMdd}";
-                                var high = decimal.Parse(csv[2], NumberStyles.Any, CultureInfo.InvariantCulture);
-                                var low = decimal.Parse(csv[3], NumberStyles.Any, CultureInfo.InvariantCulture);
-                                var price = decimal.Parse(csv[4], NumberStyles.Any, CultureInfo.InvariantCulture);
-                                var volume = decimal.Parse(csv[5], NumberStyles.Any, CultureInfo.InvariantCulture);
-                                var dollarVolume = price * volume;
+                            var newVolume = oldVolume + volume;
+                            var newDollarVolume = oldDollarVolume + newVolume * price;
+                            var newHigh = high > oldHigh ? high : oldHigh;
+                            var newLow = low < oldLow ? low : oldLow;
 
-                                var content = new Dictionary<string, string>();
-                                dataByDate.TryAdd(date, content);
-                                if (dataByDate[date].TryGetValue(name, out var tempData))
-                                {
-                                    var temp = tempData.Split(",");
-                                    var oldVolume = decimal.Parse(temp[1], NumberStyles.Any, CultureInfo.InvariantCulture);
-                                    var oldDollarVolume = decimal.Parse(temp[2], NumberStyles.Any, CultureInfo.InvariantCulture);
-                                    var oldHigh = decimal.Parse(temp[4], NumberStyles.Any, CultureInfo.InvariantCulture);
-                                    var oldLow = decimal.Parse(temp[5], NumberStyles.Any, CultureInfo.InvariantCulture);
-
-                                    var newVolume = oldVolume + volume;
-                                    var newDollarVolume = oldDollarVolume + newVolume * price;
-                                    var newHigh = Math.Max(oldHigh, high);
-                                    var newLow = Math.Min(oldLow, low);
-
-                                    dataByDate[date][name] = $"{price},{newVolume},{newDollarVolume},{temp[3]},{newHigh},{newLow},";
-                                }
-                                else
-                                {
-                                    dataByDate[date][name] = $"{price},{volume},{dollarVolume},{csv[1]},{high},{low},";
-                                }
-                            }
+                            _dataByDate[date][name] = new List<decimal?>{price, newVolume, newDollarVolume, temp[3], newHigh, newLow};
+                        }
+                        else
+                        {
+                            _dataByDate[date][name] = new List<decimal?>{price, volume, dollarVolume, data.Open, high,low};
                         }
                     }
                 }
 
-                foreach (var fileName in dataByDate.Keys.ToList())
+                foreach (var fileName in _dataByDate.Keys.ToList())
                 {
-                    var coarseByDate = dataByDate[fileName];
+                    var coarseByDate = _dataByDate[fileName];
 
                     foreach (var dataTicker in coarseByDate.Keys.ToList())
                     {
-                        string usdDollorVol;
+                        var usdDollarVol = GetUSDDollarVolume(coarseByDate, baseCurrency, dataTicker);
 
-                        // To USD dollar volume conversion, if <ticker>-USD/BUSD/USDT/USDC/BTC pair exist
-                        if (dataTicker.Substring(dataTicker.Length - 3) != "USD")
-                        {
-                            string refCurrency;
-                            decimal rateToUSD = 1m;
-
-                            if (coarseByDate.ContainsKey($"{baseCurrency[dataTicker]}USD"))
-                            {
-                                refCurrency = $"{baseCurrency[dataTicker]}USD";
-                            }
-                            else if (coarseByDate.ContainsKey($"USD{baseCurrency[dataTicker]}"))
-                            {
-                                refCurrency = $"USD{baseCurrency[dataTicker]}";
-                            }
-                            else if (coarseByDate.ContainsKey($"{baseCurrency[dataTicker]}BUSD"))
-                            {
-                                refCurrency = $"{baseCurrency[dataTicker]}BUSD";
-                            }
-                            else if (coarseByDate.ContainsKey($"BUSD{baseCurrency[dataTicker]}"))
-                            {
-                                refCurrency = $"BUSD{baseCurrency[dataTicker]}";
-                            }
-                            else if (coarseByDate.ContainsKey($"USDT{baseCurrency[dataTicker]}"))
-                            {
-                                rateToUSD = coarseByDate.ContainsKey("USDTUSD") ? 
-                                    decimal.Parse(coarseByDate["USDTUSD"].Split(",").First(), NumberStyles.Any, CultureInfo.InvariantCulture) :
-                                    1m / decimal.Parse(coarseByDate["BUSDUSDT"].Split(",").First(), NumberStyles.Any, CultureInfo.InvariantCulture);
-                                refCurrency = $"USDT{baseCurrency[dataTicker]}";
-                            }
-                            else if (coarseByDate.ContainsKey($"{baseCurrency[dataTicker]}USDC"))
-                            {
-                                rateToUSD = coarseByDate.ContainsKey("USDCUSD") ? 
-                                    decimal.Parse(coarseByDate["USDCUSD"].Split(",").First(), NumberStyles.Any, CultureInfo.InvariantCulture) :
-                                    decimal.Parse(coarseByDate["USDCBUSD"].Split(",").First(), NumberStyles.Any, CultureInfo.InvariantCulture);
-                                refCurrency = $"{baseCurrency[dataTicker]}USDC";
-                            }
-                            else if (coarseByDate.ContainsKey($"{baseCurrency[dataTicker]}BTC"))
-                            {
-                                rateToUSD = coarseByDate.ContainsKey("BTCUSD") ? 
-                                    decimal.Parse(coarseByDate["BTCUSD"].Split(",").First(), NumberStyles.Any, CultureInfo.InvariantCulture) :
-                                    decimal.Parse(coarseByDate["BTCBUSD"].Split(",").First(), NumberStyles.Any, CultureInfo.InvariantCulture);
-                                refCurrency = $"{baseCurrency[dataTicker]}BTC";
-                            }
-                            else
-                            {
-                                continue;
-                            }
-
-                            var conversionRate = decimal.Parse(coarseByDate[refCurrency].Split(",").First(), NumberStyles.Any, CultureInfo.InvariantCulture);
-                            conversionRate = refCurrency.Substring(0, 3) == "USD" || 
-                                refCurrency.Substring(0, 4) == "BUSD" ? 
-                                1m / conversionRate : 
-                                conversionRate;
-                            var baseDollarVol = decimal.Parse(coarseByDate[dataTicker].Split(",")[2], NumberStyles.Any, CultureInfo.InvariantCulture);
-                            usdDollorVol = $"{baseDollarVol * conversionRate * rateToUSD}";
-                        }
-                        else
-                        {
-                            usdDollorVol = $"{coarseByDate[dataTicker].Split(",")[2]}";
-                        }
-
-                        dataByDate[fileName][dataTicker] = $"{dataByDate[fileName][dataTicker]}{usdDollorVol}";
+                        _dataByDate[fileName][dataTicker].Add(usdDollarVol);
                     }
 
                     // Save to file
-                    var fileContent = dataByDate[fileName].Select(x => 
+                    var fileContent = _dataByDate[fileName].Select(x => 
                         {
                             var ticker = x.Key;
                             var sid = SecurityIdentifier.GenerateCrypto(ticker, _market);
-                            return $"{sid},{ticker},{x.Value}";
+                            return $"{sid},{ticker},{string.Join(",", x.Value)}";
                         })
                         .ToList();
                     var finalPath = Path.Combine(_destinationFolder, $"{fileName}.csv");
@@ -254,14 +187,80 @@ namespace QuantConnect.DataProcessing
         }
 
         /// <summary>
-        /// Helper method to read lines in a online file.
+        /// Helper method to get USD dolar volume from quote currency-intermittent pair
         /// </summary>
-        /// <param name="link">The link of online file to be read</param>
-        public IEnumerable<string> ReadOnlineDocumentLines(string link)
+        /// <param name="coarseByDate">The data sorted by date</param>
+        /// <param name="baseCurrency">Reference hash table for mapping quote currency</param>
+        /// <param name="dataTicker">The ticker needs to get exchange rate to USD</param>
+        /// <return>
+        /// Dollar Volume in USD
+        /// </return>
+        public decimal? GetUSDDollarVolume(Dictionary<string, List<decimal?>> coarseByDate, Dictionary<string, string> baseCurrency, string dataTicker)
         {
-            WebClient client = new WebClient();
-            Stream stream = client.OpenRead(link);
-            return ReadLines(stream);
+            decimal? usdDollorVol;
+
+            // To USD dollar volume conversion, if <ticker>-USD/BUSD/USDT/USDC/BTC pair exist
+            if (dataTicker.Substring(dataTicker.Length - 3) != "USD")
+            {
+                string refCurrency;
+                decimal? rateToUSD = 1m;
+
+                if (coarseByDate.ContainsKey($"{baseCurrency[dataTicker]}USD"))
+                {
+                    refCurrency = $"{baseCurrency[dataTicker]}USD";
+                }
+                else if (coarseByDate.ContainsKey($"USD{baseCurrency[dataTicker]}"))
+                {
+                    refCurrency = $"USD{baseCurrency[dataTicker]}";
+                }
+                else if (coarseByDate.ContainsKey($"{baseCurrency[dataTicker]}BUSD"))
+                {
+                    refCurrency = $"{baseCurrency[dataTicker]}BUSD";
+                }
+                else if (coarseByDate.ContainsKey($"BUSD{baseCurrency[dataTicker]}"))
+                {
+                    refCurrency = $"BUSD{baseCurrency[dataTicker]}";
+                }
+                else if (coarseByDate.ContainsKey($"USDT{baseCurrency[dataTicker]}"))
+                {
+                    rateToUSD = coarseByDate.ContainsKey("USDTUSD") ? 
+                        coarseByDate["USDTUSD"].First() :
+                        1m / coarseByDate["BUSDUSDT"].First();
+                    refCurrency = $"USDT{baseCurrency[dataTicker]}";
+                }
+                else if (coarseByDate.ContainsKey($"{baseCurrency[dataTicker]}USDC"))
+                {
+                    rateToUSD = coarseByDate.ContainsKey("USDCUSD") ? 
+                        coarseByDate["USDCUSD"].First() :
+                        coarseByDate["USDCBUSD"].First();
+                    refCurrency = $"{baseCurrency[dataTicker]}USDC";
+                }
+                else if (coarseByDate.ContainsKey($"{baseCurrency[dataTicker]}BTC"))
+                {
+                    rateToUSD = coarseByDate.ContainsKey("BTCUSD") ? 
+                        coarseByDate["BTCUSD"].First() :
+                        coarseByDate["BTCBUSD"].First();
+                    refCurrency = $"{baseCurrency[dataTicker]}BTC";
+                }
+                else
+                {
+                    return null;
+                }
+
+                var conversionRate = coarseByDate[refCurrency].First();
+                conversionRate = refCurrency.Substring(0, 3) == "USD" || 
+                    refCurrency.Substring(0, 4) == "BUSD" ? 
+                    1m / conversionRate :       // that would mean USD is the target currency not base currency
+                    conversionRate;
+                var baseDollarVol = coarseByDate[dataTicker][2];
+                usdDollorVol = baseDollarVol * conversionRate * rateToUSD;
+            }
+            else
+            {
+                usdDollorVol = coarseByDate[dataTicker][2];
+            }
+
+            return usdDollorVol;
         }
 
         /// <summary>
