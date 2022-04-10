@@ -62,18 +62,18 @@ namespace QuantConnect.DataSource
         public decimal Volume { get; set; }
 
         /// <summary>
-        /// Daily Dollor Volume in base currency of the trading pair
+        /// Daily Volume in Quote Currency
         /// Note that this only includes the volume traded in the selected market
         /// </summary>
         [ProtoMember(16)]
-        public decimal VolumeInBaseCurrency { get; set; }
+        public decimal VolumeInQuoteCurrency { get; set; }
 
         /// <summary>
-        /// Daily Dollor Volume in USD (or BUSD in Binance exchange)
+        /// Daily Volume in USD
         /// Note that this only includes the volume traded in the selected market
         /// </summary>
         [ProtoMember(17)]
-        public decimal? DollarVolume { get; set; }
+        public decimal? VolumeInUsd { get; set; }
 
         /// <summary>
         /// Alias of close price
@@ -129,15 +129,15 @@ namespace QuantConnect.DataSource
                 Symbol = new Symbol(SecurityIdentifier.Parse(csv[0]), csv[1]),
                 Time = date - _period,
 
-                Volume = decimal.Parse(csv[3], NumberStyles.Any, CultureInfo.InvariantCulture),
-                VolumeInBaseCurrency = decimal.Parse(csv[4], NumberStyles.Any, CultureInfo.InvariantCulture),
-                DollarVolume = !string.IsNullOrEmpty(csv[8]) ? 
-                    decimal.Parse(csv[8], NumberStyles.Any, CultureInfo.InvariantCulture) :
-                    null,
-                Open = decimal.Parse(csv[5], NumberStyles.Any, CultureInfo.InvariantCulture),
-                High = decimal.Parse(csv[6], NumberStyles.Any, CultureInfo.InvariantCulture),
-                Low = decimal.Parse(csv[7], NumberStyles.Any, CultureInfo.InvariantCulture),
-                Close = decimal.Parse(csv[2], NumberStyles.Any, CultureInfo.InvariantCulture)
+                Open = decimal.Parse(csv[2], NumberStyles.Any, CultureInfo.InvariantCulture),
+                High = decimal.Parse(csv[3], NumberStyles.Any, CultureInfo.InvariantCulture),
+                Low = decimal.Parse(csv[4], NumberStyles.Any, CultureInfo.InvariantCulture),
+                Close = decimal.Parse(csv[5], NumberStyles.Any, CultureInfo.InvariantCulture),
+                Volume = decimal.Parse(csv[6], NumberStyles.Any, CultureInfo.InvariantCulture),
+                VolumeInQuoteCurrency = Close * Volume,
+                VolumeInUsd = !string.IsNullOrEmpty(csv[7]) ? 
+                    decimal.Parse(csv[7], NumberStyles.Any, CultureInfo.InvariantCulture) :
+                    null
             };
         }
 
@@ -166,8 +166,8 @@ namespace QuantConnect.DataSource
                 Time = Time,
                 EndTime = EndTime,
                 Volume = Volume,
-                VolumeInBaseCurrency = VolumeInBaseCurrency,
-                DollarVolume = DollarVolume,
+                VolumeInQuoteCurrency = VolumeInQuoteCurrency,
+                VolumeInUsd = VolumeInUsd,
                 Open = Open,
                 High = High,
                 Low = Low,
@@ -199,7 +199,7 @@ namespace QuantConnect.DataSource
         /// </summary>
         public override string ToString()
         {
-            return $"{Symbol},{Price},{Volume},{VolumeInBaseCurrency},{DollarVolume},{Open},{High},{Low},{Close}";
+            return $"{Symbol},{Price},{Volume},{VolumeInQuoteCurrency},{VolumeInUsd},{Open},{High},{Low},{Close}";
         }
 
         /// <summary>

@@ -15,19 +15,16 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Globalization;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
-using System.Net;
-using QuantConnect;
-using QuantConnect.Configuration;
+using QuantConnect.Data;
 using QuantConnect.Data.Market;
 using QuantConnect.DataSource;
 using QuantConnect.Logging;
-using QuantConnect.Util;
+using QuantConnect.Securities;
+using QuantConnect.Securities.CurrencyConversion;
 using QuantConnect.ToolBox;
+using QuantConnect.Util;
 
 namespace QuantConnect.DataProcessing
 {
@@ -42,6 +39,8 @@ namespace QuantConnect.DataProcessing
 
         private readonly DateTime _fromDate;
         private readonly DateTime _toDate;
+
+        private Dictionary<string, string> _baseCurrency = new();
 
         private Dictionary<string, Dictionary<string, List<decimal?>>> _dataByDate = new();
 
@@ -70,8 +69,6 @@ namespace QuantConnect.DataProcessing
         {
             try
             {
-                var baseCurrency = new Dictionary<string, string>();
-
                 var symbolProperties = Extensions.DownloadData("https://raw.githubusercontent.com/QuantConnect/Lean/master/Data/symbol-properties/symbol-properties-database.csv")
                     .Split("\n");
                 foreach (var line in symbolProperties)
@@ -79,25 +76,19 @@ namespace QuantConnect.DataProcessing
                     var lineItem = line.Split(",");
                     if (lineItem.First() == _market)
                     {
-                        CurrencyPairUtil.DecomposeCurrencyPair(Symbol.Create(lineItem[1], SecurityType.Crypto, _market), out var __, out var quoteCurrency);
-                        baseCurrency[lineItem[1]] = quoteCurrency;
+                        CurrencyPairUtil.DecomposeCurrencyPair(Symbol.Create(lineItem[1], SecurityType.Crypto, _market), out var _, out var quoteCurrency);
+                        _baseCurrency[lineItem[1]] = quoteCurrency;
                     }
                 }
-
-                var files = new List<string>();
 
                 // Get all trade data files in set crypto market data file
                 foreach(var file in Directory.GetFiles(Path.Combine(_baseFolder, "daily"), "*_trade.zip", SearchOption.AllDirectories))
                 {
-                    files.Add(file);
-                }
-
-                foreach (var fileString in files)
-                {
-                    var dataReader = new LeanDataReader(fileString);
+                    var dataReader = new LeanDataReader(file);
                     var baseData = dataReader.Parse();
 
-                    string name = fileString.Split("\\").Last().Split("_").First().ToUpper();
+                    var fileInfo = new FileInfo(file);
+                    LeanData.TryParsePath(fileInfo.FullName, out var symbol, out _, out _);
 
                     foreach (TradeBar data in baseData)
                     {
@@ -108,65 +99,46 @@ namespace QuantConnect.DataProcessing
                         }
 
                         var date = $"{dateTime:yyyyMMdd}";
-                        var high = data.High;
-                        var low = data.Low;
-                        var price = data.Close;
-                        var volume = data.Volume;
-                        var dollarVolume = price * volume;
-
-                        var content = new Dictionary<string, List<decimal?>>();
-                        _dataByDate.TryAdd(date, content);
-                        if (_dataByDate[date].TryGetValue(name, out var temp))
+                        
+                        if (!_dataByDate.TryGetValue(date, out var content))
                         {
-                            var oldVolume = temp[1];
-                            var oldDollarVolume = temp[2];
-                            var oldHigh = temp[4];
-                            var oldLow = temp[5];
-
-                            var newVolume = oldVolume + volume;
-                            var newDollarVolume = oldDollarVolume + newVolume * price;
-                            var newHigh = high > oldHigh ? high : oldHigh;
-                            var newLow = low < oldLow ? low : oldLow;
-
-                            _dataByDate[date][name] = new List<decimal?>{price, newVolume, newDollarVolume, temp[3], newHigh, newLow};
+                            _dataByDate[date] = content = new Dictionary<string, List<decimal?>>();
                         }
-                        else
-                        {
-                            _dataByDate[date][name] = new List<decimal?>{price, volume, dollarVolume, data.Open, high,low};
-                        }
+                        
+                        content[symbol.ID.Symbol] = new List<decimal?>{data.Open, data.High, data.Low, data.Close, data.Volume};
                     }
                 }
 
-                foreach (var fileName in _dataByDate.Keys.ToList())
+                foreach (var date in _dataByDate.Keys.ToList())
                 {
-                    var coarseByDate = _dataByDate[fileName];
+                    var coarseByDate = _dataByDate[date];
 
                     foreach (var dataTicker in coarseByDate.Keys.ToList())
                     {
-                        decimal? usdDollarVol;
-                        
+                        decimal? usdVol = null;
+
                         // In case there might be missing data
                         try
                         {
-                            usdDollarVol = GetUSDDollarVolume(coarseByDate, baseCurrency, dataTicker);
+                            usdVol = GetUSDVolume(date, dataTicker);
                         }
                         catch
                         {
-                            usdDollarVol = null;
+                            Log.Trace($"No USD-{dataTicker} rate conversion available on {date}.");
                         }
 
-                        _dataByDate[fileName][dataTicker].Add(usdDollarVol);
+                        coarseByDate[dataTicker].Add(usdVol);
                     }
 
                     // Save to file
-                    var fileContent = _dataByDate[fileName].Select(x => 
+                    var fileContent = coarseByDate.Select(x => 
                         {
                             var ticker = x.Key;
                             var sid = SecurityIdentifier.GenerateCrypto(ticker, _market);
                             return $"{sid},{ticker},{string.Join(",", x.Value)}";
                         })
                         .ToList();
-                    var finalPath = Path.Combine(_destinationFolder, $"{fileName}.csv");
+                    var finalPath = Path.Combine(_destinationFolder, $"{date}.csv");
                     var finalFileExists = File.Exists(finalPath);
 
                     var lines = new HashSet<string>(fileContent);
@@ -178,12 +150,8 @@ namespace QuantConnect.DataProcessing
                         }
                     }
 
-                    var finalLines = lines.OrderBy(x => x.Split(',').First()).ToList();
-
-                    var tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.tmp");
-                    File.WriteAllLines(tempPath, finalLines);
-                    var tempFilePath = new FileInfo(tempPath);
-                    tempFilePath.MoveTo(finalPath, true);
+                    var finalLines = lines.OrderBy(x => x.Split(',').First());
+                    File.WriteAllLines(finalPath, finalLines);
                 }
             }
             catch (Exception e)
@@ -197,96 +165,91 @@ namespace QuantConnect.DataProcessing
         }
 
         /// <summary>
-        /// Helper method to get USD dolar volume from quote currency-intermittent pair
+        /// Helper method to get USD volume from quote currency-intermittent pair
         /// </summary>
-        /// <param name="coarseByDate">The data sorted by date</param>
-        /// <param name="baseCurrency">Reference hash table for mapping quote currency</param>
-        /// <param name="dataTicker">The ticker needs to get exchange rate to USD</param>
+        /// <param name="date">Date of data</param>
+        /// <param name="ticker">The ticker needs to get exchange rate to USD</param>
         /// <return>
-        /// Dollar Volume in USD
+        /// Volume in USD
         /// </return>
-        public decimal? GetUSDDollarVolume(Dictionary<string, List<decimal?>> coarseByDate, Dictionary<string, string> baseCurrency, string dataTicker)
+        public decimal? GetUSDVolume(string date, string ticker)
         {
-            decimal? usdDollorVol;
+            decimal? usdVol = null;
+            var dict = _dataByDate[date];
+            var data = dict[ticker];
+            var baseVolume = data[^1];
 
-            // To USD dollar volume conversion, if <ticker>-USD/BUSD/USDT/USDC/BTC pair exist
-            if (dataTicker.Substring(dataTicker.Length - 3) != "USD")
+            // To USD volume conversion, if <ticker>-BTC/USD/BUSD/USDC/USDP/USDT pair exist
+            if (ticker.Substring(ticker.Length - 3) != "USD")
             {
-                string refCurrency;
-                decimal? rateToUSD = 1m;
+                var quoteCurrency = _baseCurrency[ticker];
+                var targetCurrency = _market == Market.Binance ? "BUSD" : "USD";
 
-                if (coarseByDate.ContainsKey($"{baseCurrency[dataTicker]}USD"))
+                var existingSecurities = new List<Security>
                 {
-                    refCurrency = $"{baseCurrency[dataTicker]}USD";
-                }
-                else if (coarseByDate.ContainsKey($"USD{baseCurrency[dataTicker]}"))
+                    CreateSecurity(Symbol.Create(ticker, SecurityType.Crypto, _market))
+                };
+                existingSecurities[0].SetMarketPrice(new Tick { Value = (decimal)data[^2] });
+                
+                foreach(var cur in new List<string>{targetCurrency, "BTC", "USDC", "USDP", "USDT"})
                 {
-                    refCurrency = $"USD{baseCurrency[dataTicker]}";
-                }
-                else if (coarseByDate.ContainsKey($"{baseCurrency[dataTicker]}BUSD"))
-                {
-                    refCurrency = $"{baseCurrency[dataTicker]}BUSD";
-                }
-                else if (coarseByDate.ContainsKey($"BUSD{baseCurrency[dataTicker]}"))
-                {
-                    refCurrency = $"BUSD{baseCurrency[dataTicker]}";
-                }
-                else if (coarseByDate.ContainsKey($"USDT{baseCurrency[dataTicker]}"))
-                {
-                    rateToUSD = coarseByDate.ContainsKey("USDTUSD") ? 
-                        coarseByDate["USDTUSD"].First() :
-                        1m / coarseByDate["BUSDUSDT"].First();
-                    refCurrency = $"USDT{baseCurrency[dataTicker]}";
-                }
-                else if (coarseByDate.ContainsKey($"{baseCurrency[dataTicker]}USDC"))
-                {
-                    rateToUSD = coarseByDate.ContainsKey("USDCUSD") ? 
-                        coarseByDate["USDCUSD"].First() :
-                        coarseByDate["USDCBUSD"].First();
-                    refCurrency = $"{baseCurrency[dataTicker]}USDC";
-                }
-                else if (coarseByDate.ContainsKey($"{baseCurrency[dataTicker]}BTC"))
-                {
-                    rateToUSD = coarseByDate.ContainsKey("BTCUSD") ? 
-                        coarseByDate["BTCUSD"].First() :
-                        coarseByDate["BTCBUSD"].First();
-                    refCurrency = $"{baseCurrency[dataTicker]}BTC";
-                }
-                else
-                {
-                    return null;
-                }
+                    foreach(var intermediateTicker in new List<string>{$"{cur}{quoteCurrency}", $"{quoteCurrency}{cur}", $"{cur}{targetCurrency}", $"{targetCurrency}{cur}"})
+                    {
+                        if (dict.ContainsKey(intermediateTicker))
+                        {
+                            var symbol = Symbol.Create(intermediateTicker, SecurityType.Crypto, _market);
+                            var sec = CreateSecurity(symbol);
+                            existingSecurities.Add(sec);
+                            sec.SetMarketPrice(new Tick { Value = (decimal)dict[symbol.ID.Symbol][^2] });
+                        } 
+                    }
+                };
 
-                var conversionRate = coarseByDate[refCurrency].First();
-                conversionRate = refCurrency.Substring(0, 3) == "USD" || 
-                    refCurrency.Substring(0, 4) == "BUSD" ? 
-                    1m / conversionRate :       // that would mean USD is the target currency not base currency
-                    conversionRate;
-                var baseDollarVol = coarseByDate[dataTicker][2];
-                usdDollorVol = baseDollarVol * conversionRate * rateToUSD;
+                var currencyConversion = SecurityCurrencyConversion.LinearSearch(
+                    quoteCurrency,
+                    targetCurrency,
+                    existingSecurities,
+                    new List<Symbol>(),
+                    CreateSecurity);
+                var conversionRate = currencyConversion.Update();
+
+                usdVol = baseVolume * conversionRate;
             }
             else
             {
-                usdDollorVol = coarseByDate[dataTicker][2];
+                usdVol = baseVolume;
             }
 
-            return usdDollorVol;
+            return usdVol;
         }
 
         /// <summary>
-        /// Helper method to read lines in a stream.
+        /// Helper method to create security for conversion.
         /// </summary>
-        /// <param name="fileStream">The stream instance to be read</param>
-        public IEnumerable<string> ReadLines(Stream fileStream)
+        /// <param name="symbol">symbol to be added to Securities</param>
+        private static Security CreateSecurity(Symbol symbol)
         {
-            using (var reader = new StreamReader(fileStream))
-            {
-                string line;
-                while ((line = reader.ReadLine()) != null)
-                {
-                    yield return line;
-                }
-            }
+            var timezone = TimeZones.Utc;
+
+            var config = new SubscriptionDataConfig(
+                typeof(TradeBar),
+                symbol,
+                Resolution.Daily,
+                timezone,
+                timezone,
+                true,
+                false,
+                true);
+
+            return new Security(
+                SecurityExchangeHours.AlwaysOpen(timezone),
+                config,
+                new Cash(Currencies.USD, 0, 1),
+                SymbolProperties.GetDefault(Currencies.USD),
+                ErrorCurrencyConverter.Instance,
+                RegisteredSecurityDataTypesProvider.Null,
+                new SecurityCache()
+            );
         }
     }
 }

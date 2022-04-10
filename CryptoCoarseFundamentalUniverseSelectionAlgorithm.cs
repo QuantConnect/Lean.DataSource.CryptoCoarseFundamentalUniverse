@@ -50,7 +50,7 @@ namespace QuantConnect.Algorithm.CSharp
         private IEnumerable<Symbol> UniverseSelectionFilter(IEnumerable<CryptoCoarseFundamental> data)
         {
             return from datum in data
-                where datum.Volume >= 100m && datum.DollarVolume > 10000m
+                where datum.Volume >= 100m && datum.VolumeInUsd > 10000m
                 select datum.Symbol;
         }
 
