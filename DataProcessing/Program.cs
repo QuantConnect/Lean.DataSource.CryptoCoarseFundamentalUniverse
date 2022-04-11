@@ -46,12 +46,6 @@ namespace QuantConnect.DataProcessing
             }
 
             var market = optionsObject["market"].ToString();
-            var fromDate = optionsObject.ContainsKey("from-date")
-                ? Parse.DateTimeExact(optionsObject["from-date"].ToString(), "yyyy-MM-dd")
-                : DateTime.Today;
-            var toDate = optionsObject.ContainsKey("to-date")
-                ? Parse.DateTimeExact(optionsObject["to-date"].ToString(), "yyyy-MM-dd")
-                : DateTime.Today;
 
             // Get the config values first before running. These values are set for us
             // automatically to the value set on the website when defining this data type
@@ -64,7 +58,7 @@ namespace QuantConnect.DataProcessing
             try
             {
                 // Pass in the values we got from the configuration into the converter.
-                instance = new CryptoCoarseFundamentalUniverseDataConverter(market, baseFolder, fromDate, toDate);
+                instance = new CryptoCoarseFundamentalUniverseDataConverter(market, baseFolder);
             }
             catch (Exception err)
             {

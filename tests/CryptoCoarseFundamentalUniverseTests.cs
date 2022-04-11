@@ -27,12 +27,34 @@ using QuantConnect.Data;
 using QuantConnect.DataProcessing;
 using QuantConnect.DataSource;
 using QuantConnect.Data.Market;
+using QuantConnect.Securities;
 
 namespace QuantConnect.DataLibrary.Tests
 {
     [TestFixture]
     public class CryptoCoarseFundamentalTests
     {
+        private string _market = Market.Bitfinex;
+        private List<Security> _existingSecurities;
+
+        [SetUp]
+        public void SetUp()
+        {
+            _existingSecurities = new List<Security>
+            {
+                CryptoCoarseFundamentalUniverseDataConverter.CreateSecurity(Symbol.Create("ETHBTC", SecurityType.Crypto, _market), "BTC"),
+                CryptoCoarseFundamentalUniverseDataConverter.CreateSecurity(Symbol.Create("ETHUSD", SecurityType.Crypto, _market), "USD"),
+                CryptoCoarseFundamentalUniverseDataConverter.CreateSecurity(Symbol.Create("XRPLTC", SecurityType.Crypto, _market), "LTC"),
+                CryptoCoarseFundamentalUniverseDataConverter.CreateSecurity(Symbol.Create("LTCUSDT", SecurityType.Crypto, _market), "USDT"),
+                CryptoCoarseFundamentalUniverseDataConverter.CreateSecurity(Symbol.Create("USDTUSD", SecurityType.Crypto, _market), "USD"),
+            };
+
+            foreach(var sec in _existingSecurities)
+            {
+                sec.SetMarketPrice(new Tick { Value = (decimal)10m });
+            }
+        }
+
         [Test]
         public void JsonRoundTrip()
         {
@@ -50,9 +72,21 @@ namespace QuantConnect.DataLibrary.Tests
             var datum = CreateNewSelection();
 
             var expected = from d in datum
-                            where d.Price > 50m && d.VolumeInBaseCurrency > 10000m
+                            where d.Price > 50m && d.VolumeInQuoteCurrency > 10000m
                             select d.Symbol;
-            var result = new List<Symbol> {Symbol.Create("ETHBUSD", SecurityType.Crypto, Market.Binance)};
+            var result = new List<Symbol> {Symbol.Create("ETHUSD", SecurityType.Crypto, _market)};
+
+            AssertAreEqual(expected, result);
+        }
+
+        [Test]
+        [TestCase(1, "USD", 1)]
+        [TestCase(1, "ETH", 10)]
+        [TestCase(1, "BTC", 10)]
+        [TestCase(10, "LTC", 10)]
+        public void Selection(decimal volume, string quoteCurrency, decimal? result)
+        {
+            var expected = CryptoCoarseFundamentalUniverseDataConverter.GetUSDVolume(volume, _market, quoteCurrency, _existingSecurities);
 
             AssertAreEqual(expected, result);
         }
@@ -78,14 +112,14 @@ namespace QuantConnect.DataLibrary.Tests
             return new CryptoCoarseFundamental
                 {
                     Volume = 20m,
-                    VolumeInBaseCurrency = 200m,
+                    VolumeInQuoteCurrency = 200m,
                     VolumeInUsd = 200m,
                     Open = 5m,
                     High = 15m,
                     Low = 4m,
                     Close = 10m,
 
-                    Symbol = Symbol.Create("BTCBUSD", SecurityType.Crypto, Market.Binance),
+                    Symbol = Symbol.Create("BTCUSD", SecurityType.Crypto, _market),
                     Time = DateTime.Today
                 };
         }
@@ -97,27 +131,27 @@ namespace QuantConnect.DataLibrary.Tests
                 new CryptoCoarseFundamental
                 {
                     Volume = 20m,
-                    VolumeInBaseCurrency = 200m,
+                    VolumeInQuoteCurrency = 200m,
                     VolumeInUsd = 200m,
                     Open = 5m,
                     High = 15m,
                     Low = 4m,
                     Close = 10m,
 
-                    Symbol = Symbol.Create("BTCBUSD", SecurityType.Crypto, Market.Binance),
+                    Symbol = Symbol.Create("BTCUSD", SecurityType.Crypto, _market),
                     Time = DateTime.Today
                 },
                 new CryptoCoarseFundamental
                 {
                     Volume = 200m,
-                    VolumeInBaseCurrency = 20000m,
+                    VolumeInQuoteCurrency = 20000m,
                     VolumeInUsd = 50000m,
                     Open = 50m,
                     High = 150m,
                     Low = 40m,
                     Close = 100m,
 
-                    Symbol = Symbol.Create("ETHBUSD", SecurityType.Crypto, Market.Binance),
+                    Symbol = Symbol.Create("ETHUSD", SecurityType.Crypto, _market),
                     Time = DateTime.Today
                 }
             };

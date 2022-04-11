@@ -17,6 +17,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using QuantConnect;
 using QuantConnect.Data;
 using QuantConnect.Data.Market;
 using QuantConnect.DataSource;
@@ -37,27 +38,20 @@ namespace QuantConnect.DataProcessing
         private readonly string _baseFolder;
         private readonly string _destinationFolder;
 
-        private readonly DateTime _fromDate;
-        private readonly DateTime _toDate;
-
-        private Dictionary<string, string> _baseCurrency = new();
-
-        private Dictionary<string, Dictionary<string, List<decimal?>>> _dataByDate = new();
+        private Dictionary<Symbol, string> _quoteCurrency = new();
+        private Dictionary<string, Dictionary<Symbol, List<decimal?>>> _dataByDate = new();
+        private Dictionary<Symbol, Security> _existingSecurities = new();
 
         /// <summary>
         /// Creates a new instance of <see cref="CryptoCoarseFundamental"/>
         /// </summary>
         /// <param name="market">The data vendor market</param>
         /// <param name="baseFolder">The folder where the base data saved at</param>
-        /// <param name="fromDate">The start date of data processing</param>
-        /// <param name="toDate">The end date of data processing</param>
-        public CryptoCoarseFundamentalUniverseDataConverter(string market, string baseFolder, DateTime fromDate, DateTime toDate)
+        public CryptoCoarseFundamentalUniverseDataConverter(string market, string baseFolder)
         {
             _market = market;
             _baseFolder = baseFolder;
             _destinationFolder = Path.Combine(baseFolder, "fundamental", "coarse");
-            _fromDate = fromDate;
-            _toDate = toDate;
 
             Directory.CreateDirectory(_destinationFolder);
         }
@@ -69,18 +63,6 @@ namespace QuantConnect.DataProcessing
         {
             try
             {
-                var symbolProperties = Extensions.DownloadData("https://raw.githubusercontent.com/QuantConnect/Lean/master/Data/symbol-properties/symbol-properties-database.csv")
-                    .Split("\n");
-                foreach (var line in symbolProperties)
-                {
-                    var lineItem = line.Split(",");
-                    if (lineItem.First() == _market)
-                    {
-                        CurrencyPairUtil.DecomposeCurrencyPair(Symbol.Create(lineItem[1], SecurityType.Crypto, _market), out var _, out var quoteCurrency);
-                        _baseCurrency[lineItem[1]] = quoteCurrency;
-                    }
-                }
-
                 // Get all trade data files in set crypto market data file
                 foreach(var file in Directory.GetFiles(Path.Combine(_baseFolder, "daily"), "*_trade.zip", SearchOption.AllDirectories))
                 {
@@ -90,22 +72,22 @@ namespace QuantConnect.DataProcessing
                     var fileInfo = new FileInfo(file);
                     LeanData.TryParsePath(fileInfo.FullName, out var symbol, out _, out _);
 
+                    CurrencyPairUtil.DecomposeCurrencyPair(symbol, out var _, out var quoteCurrency);
+                    _quoteCurrency[symbol] = quoteCurrency;
+
+                    _existingSecurities.Add(symbol, CreateSecurity(symbol, quoteCurrency));
+
                     foreach (TradeBar data in baseData)
                     {
                         var dateTime = data.EndTime;
-                        if (dateTime < _fromDate || dateTime > _toDate)
-                        {
-                            continue;
-                        }
-
                         var date = $"{dateTime:yyyyMMdd}";
                         
                         if (!_dataByDate.TryGetValue(date, out var content))
                         {
-                            _dataByDate[date] = content = new Dictionary<string, List<decimal?>>();
+                            _dataByDate[date] = content = new Dictionary<Symbol, List<decimal?>>();
                         }
                         
-                        content[symbol.ID.Symbol] = new List<decimal?>{data.Open, data.High, data.Low, data.Close, data.Volume};
+                        content[symbol] = new List<decimal?>{data.Open, data.High, data.Low, data.Close, data.Volume};
                     }
                 }
 
@@ -113,29 +95,31 @@ namespace QuantConnect.DataProcessing
                 {
                     var coarseByDate = _dataByDate[date];
 
-                    foreach (var dataTicker in coarseByDate.Keys.ToList())
+                    foreach (var dataSymbol in coarseByDate.Keys.ToList())
                     {
+                        _existingSecurities[dataSymbol].SetMarketPrice(new Tick { Value = (decimal)coarseByDate[dataSymbol][^2] });
+
                         decimal? usdVol = null;
 
                         // In case there might be missing data
                         try
                         {
-                            usdVol = GetUSDVolume(date, dataTicker);
+                            var volume = _dataByDate[date][dataSymbol][^1];
+                            usdVol = GetUSDVolume(volume, _market, _quoteCurrency[dataSymbol], _existingSecurities.Values.ToList());
                         }
                         catch
                         {
-                            Log.Trace($"No USD-{dataTicker} rate conversion available on {date}.");
+                            Log.Trace($"No USD-{dataSymbol.Value} rate conversion available on {date}.");
                         }
 
-                        coarseByDate[dataTicker].Add(usdVol);
+                        coarseByDate[dataSymbol].Add(Extensions.SmartRounding((decimal)usdVol));
                     }
 
                     // Save to file
                     var fileContent = coarseByDate.Select(x => 
                         {
-                            var ticker = x.Key;
-                            var sid = SecurityIdentifier.GenerateCrypto(ticker, _market);
-                            return $"{sid},{ticker},{string.Join(",", x.Value)}";
+                            var sid = x.Key.ID;
+                            return $"{sid},{sid.Symbol},{string.Join(",", x.Value)}";
                         })
                         .ToList();
                     var finalPath = Path.Combine(_destinationFolder, $"{date}.csv");
@@ -167,58 +151,31 @@ namespace QuantConnect.DataProcessing
         /// <summary>
         /// Helper method to get USD volume from quote currency-intermittent pair
         /// </summary>
-        /// <param name="date">Date of data</param>
-        /// <param name="ticker">The ticker needs to get exchange rate to USD</param>
+        /// <param name="baseVolume">The volume of symbol at date in quote currency</param>
+        /// <param name="market">The market exchange</param>
+        /// <param name="quoteCurrency">The quote currency of the Symbol</param>
+        /// <param name="existingSecurities">List of existing securities available to exchange rate</param>
         /// <return>
         /// Volume in USD
         /// </return>
-        public decimal? GetUSDVolume(string date, string ticker)
+        public static decimal? GetUSDVolume(
+            decimal? baseVolume,
+            string market,
+            string quoteCurrency,
+            List<Security> existingSecurities
+        )
         {
-            decimal? usdVol = null;
-            var dict = _dataByDate[date];
-            var data = dict[ticker];
-            var baseVolume = data[^1];
+            var targetCurrency = market == Market.Binance ? "BUSD" : "USD";
 
-            // To USD volume conversion, if <ticker>-BTC/USD/BUSD/USDC/USDP/USDT pair exist
-            if (ticker.Substring(ticker.Length - 3) != "USD")
-            {
-                var quoteCurrency = _baseCurrency[ticker];
-                var targetCurrency = _market == Market.Binance ? "BUSD" : "USD";
+            var currencyConversion = SecurityCurrencyConversion.LinearSearch(
+                quoteCurrency,
+                targetCurrency,
+                existingSecurities,
+                new List<Symbol>(),
+                symbol => CreateSecurity(symbol, quoteCurrency));
+            var conversionRate = currencyConversion.Update();
 
-                var existingSecurities = new List<Security>
-                {
-                    CreateSecurity(Symbol.Create(ticker, SecurityType.Crypto, _market))
-                };
-                existingSecurities[0].SetMarketPrice(new Tick { Value = (decimal)data[^2] });
-                
-                foreach(var cur in new List<string>{targetCurrency, "BTC", "USDC", "USDP", "USDT"})
-                {
-                    foreach(var intermediateTicker in new List<string>{$"{cur}{quoteCurrency}", $"{quoteCurrency}{cur}", $"{cur}{targetCurrency}", $"{targetCurrency}{cur}"})
-                    {
-                        if (dict.ContainsKey(intermediateTicker))
-                        {
-                            var symbol = Symbol.Create(intermediateTicker, SecurityType.Crypto, _market);
-                            var sec = CreateSecurity(symbol);
-                            existingSecurities.Add(sec);
-                            sec.SetMarketPrice(new Tick { Value = (decimal)dict[symbol.ID.Symbol][^2] });
-                        } 
-                    }
-                };
-
-                var currencyConversion = SecurityCurrencyConversion.LinearSearch(
-                    quoteCurrency,
-                    targetCurrency,
-                    existingSecurities,
-                    new List<Symbol>(),
-                    CreateSecurity);
-                var conversionRate = currencyConversion.Update();
-
-                usdVol = baseVolume * conversionRate;
-            }
-            else
-            {
-                usdVol = baseVolume;
-            }
+            decimal? usdVol = baseVolume * conversionRate;
 
             return usdVol;
         }
@@ -226,8 +183,9 @@ namespace QuantConnect.DataProcessing
         /// <summary>
         /// Helper method to create security for conversion.
         /// </summary>
-        /// <param name="symbol">symbol to be added to Securities</param>
-        private static Security CreateSecurity(Symbol symbol)
+        /// <param name="symbol">Symbol to be added to Securities</param>
+        /// <param name="quoteCurrency">The quote currency of the Symbol</param>
+        public static Security CreateSecurity(Symbol symbol, string quoteCurrency)
         {
             var timezone = TimeZones.Utc;
 
@@ -244,8 +202,8 @@ namespace QuantConnect.DataProcessing
             return new Security(
                 SecurityExchangeHours.AlwaysOpen(timezone),
                 config,
-                new Cash(Currencies.USD, 0, 1),
-                SymbolProperties.GetDefault(Currencies.USD),
+                new Cash(quoteCurrency, 0, 1),
+                SymbolProperties.GetDefault(quoteCurrency),
                 ErrorCurrencyConverter.Instance,
                 RegisteredSecurityDataTypesProvider.Null,
                 new SecurityCache()
