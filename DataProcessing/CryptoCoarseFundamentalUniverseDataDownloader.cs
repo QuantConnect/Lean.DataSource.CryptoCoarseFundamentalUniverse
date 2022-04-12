@@ -91,28 +91,36 @@ namespace QuantConnect.DataProcessing
                     }
                 }
 
-                foreach (var date in _dataByDate.Keys.ToList())
+                foreach (var date in _dataByDate.Keys)
                 {
                     var coarseByDate = _dataByDate[date];
 
-                    foreach (var dataSymbol in coarseByDate.Keys.ToList())
+                    // Update all securities daily price for conversion
+                    foreach (var kvp in coarseByDate)
                     {
-                        _existingSecurities[dataSymbol].SetMarketPrice(new Tick { Value = (decimal)coarseByDate[dataSymbol][^2] });
+                        _existingSecurities[kvp.Key].SetMarketPrice(new Tick { Value = (decimal)kvp.Value[^2] });
+                    }
+
+                    foreach (var kvp in coarseByDate)
+                    {
+                        var dataSymbol = kvp.Key;
+                        var content = kvp.Value;
 
                         decimal? usdVol = null;
-
+                        
                         // In case there might be missing data
                         try
                         {
-                            var volume = _dataByDate[date][dataSymbol][^1];
-                            usdVol = GetUSDVolume(volume, _market, _quoteCurrency[dataSymbol], _existingSecurities.Values.ToList());
+                            var volume = content[^1];
+                            var rawUsdVol = GetUSDVolume(volume, _quoteCurrency[dataSymbol], _existingSecurities.Values.ToList());
+                            usdVol = rawUsdVol == null? null : (decimal?)Extensions.SmartRounding((decimal)rawUsdVol);
                         }
                         catch
                         {
                             Log.Trace($"No USD-{dataSymbol.Value} rate conversion available on {date}.");
                         }
 
-                        coarseByDate[dataSymbol].Add(Extensions.SmartRounding((decimal)usdVol));
+                        content.Add(usdVol);
                     }
 
                     // Save to file
@@ -152,7 +160,6 @@ namespace QuantConnect.DataProcessing
         /// Helper method to get USD volume from quote currency-intermittent pair
         /// </summary>
         /// <param name="baseVolume">The volume of symbol at date in quote currency</param>
-        /// <param name="market">The market exchange</param>
         /// <param name="quoteCurrency">The quote currency of the Symbol</param>
         /// <param name="existingSecurities">List of existing securities available to exchange rate</param>
         /// <return>
@@ -160,16 +167,13 @@ namespace QuantConnect.DataProcessing
         /// </return>
         public static decimal? GetUSDVolume(
             decimal? baseVolume,
-            string market,
             string quoteCurrency,
             List<Security> existingSecurities
         )
         {
-            var targetCurrency = market == Market.Binance ? "BUSD" : "USD";
-
             var currencyConversion = SecurityCurrencyConversion.LinearSearch(
                 quoteCurrency,
-                targetCurrency,
+                "USD",
                 existingSecurities,
                 new List<Symbol>(),
                 symbol => CreateSecurity(symbol, quoteCurrency));
@@ -187,22 +191,9 @@ namespace QuantConnect.DataProcessing
         /// <param name="quoteCurrency">The quote currency of the Symbol</param>
         public static Security CreateSecurity(Symbol symbol, string quoteCurrency)
         {
-            var timezone = TimeZones.Utc;
-
-            var config = new SubscriptionDataConfig(
-                typeof(TradeBar),
-                symbol,
-                Resolution.Daily,
-                timezone,
-                timezone,
-                true,
-                false,
-                true);
-
-            return new Security(
-                SecurityExchangeHours.AlwaysOpen(timezone),
-                config,
-                new Cash(quoteCurrency, 0, 1),
+            return new Security(symbol,
+                SecurityExchangeHours.AlwaysOpen(TimeZones.Utc),
+                new Cash(quoteCurrency, 0, 0),
                 SymbolProperties.GetDefault(quoteCurrency),
                 ErrorCurrencyConverter.Instance,
                 RegisteredSecurityDataTypesProvider.Null,

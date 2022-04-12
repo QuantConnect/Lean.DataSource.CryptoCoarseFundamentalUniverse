@@ -86,7 +86,7 @@ namespace QuantConnect.DataLibrary.Tests
         [TestCase(10, "LTC", 10)]
         public void Selection(decimal volume, string quoteCurrency, decimal? result)
         {
-            var expected = CryptoCoarseFundamentalUniverseDataConverter.GetUSDVolume(volume, _market, quoteCurrency, _existingSecurities);
+            var expected = CryptoCoarseFundamentalUniverseDataConverter.GetUSDVolume(volume, quoteCurrency, _existingSecurities);
 
             AssertAreEqual(expected, result);
         }
