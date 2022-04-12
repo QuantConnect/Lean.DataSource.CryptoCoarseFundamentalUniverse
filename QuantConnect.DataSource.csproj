@@ -2,9 +2,9 @@
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
     <RootNamespace>QuantConnect.DataSource</RootNamespace>
-    <AssemblyName>QuantConnect.DataSource.MyCustonDataType</AssemblyName>
+    <AssemblyName>QuantConnect.DataSource.CryptoCoarseFundamental</AssemblyName>
     <OutputPath>bin\$(Configuration)</OutputPath>
-    <DocumentationFile>$(OutputPath)\QuantConnect.DataSource.MyCustonDataType.xml</DocumentationFile>
+    <DocumentationFile>$(OutputPath)\QuantConnect.DataSource.CryptoCoarseFundamental.xml</DocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,8 +20,8 @@
     <Compile Remove="DataProcessing\**" />
     <EmbeddedResource Remove="DataProcessing\**" />
     <None Remove="DataProcessing\**" />
-    <Compile Remove="Demonstration.cs" />
-    <Compile Remove="DemonstrationUniverse.cs" />
+    <Compile Remove="CryptoCoarseFundamentalUniverseSelectionAlgorithm.cs" />
+    <None Remove="CryptoCoarseFundamentalUniverseSelectionAlgorithm.py" />
     <None Remove=".gitignore" />
   </ItemGroup>
 </Project>
