@@ -14,7 +14,6 @@
 */
 
 using System;
-using System.IO;
 using QuantConnect.Logging;
 using QuantConnect.Configuration;
 
@@ -34,7 +33,7 @@ namespace QuantConnect.DataProcessing
             var optionsObject = ToolboxArgumentParser.ParseArguments(args);
             if (optionsObject.Count == 0)
             {
-                Log.Error("DataProcessing.Program.Main(): No parameter was detected.");
+                Log.Error("DataProcessing.Program.Main(): No parameter was detected, expected market");
                 Environment.Exit(1);
             }
 
@@ -45,18 +44,11 @@ namespace QuantConnect.DataProcessing
 
             var market = optionsObject["market"].ToString();
 
-            // Get the config values first before running. These values are set for us
-            // automatically to the value set on the website when defining this data type
-            var baseFolder = Path.Combine(
-                Globals.DataFolder,
-                "crypto",
-                market);
-
             CryptoCoarseFundamentalUniverseDataConverter instance = null;
             try
             {
                 // Pass in the values we got from the configuration into the converter.
-                instance = new CryptoCoarseFundamentalUniverseDataConverter(baseFolder);
+                instance = new CryptoCoarseFundamentalUniverseDataConverter(market);
             }
             catch (Exception err)
             {
