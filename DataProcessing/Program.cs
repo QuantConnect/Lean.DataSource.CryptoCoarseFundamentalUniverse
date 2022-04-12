@@ -15,10 +15,8 @@
 
 using System;
 using System.IO;
-using QuantConnect.Configuration;
 using QuantConnect.Logging;
-using QuantConnect.Util;
-using QuantConnect.ToolBox;
+using QuantConnect.Configuration;
 
 namespace QuantConnect.DataProcessing
 {
@@ -58,7 +56,7 @@ namespace QuantConnect.DataProcessing
             try
             {
                 // Pass in the values we got from the configuration into the converter.
-                instance = new CryptoCoarseFundamentalUniverseDataConverter(market, baseFolder);
+                instance = new CryptoCoarseFundamentalUniverseDataConverter(baseFolder);
             }
             catch (Exception err)
             {

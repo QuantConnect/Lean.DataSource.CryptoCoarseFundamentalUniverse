@@ -17,8 +17,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using QuantConnect;
-using QuantConnect.Data;
 using QuantConnect.Data.Market;
 using QuantConnect.DataSource;
 using QuantConnect.Logging;
@@ -34,7 +32,6 @@ namespace QuantConnect.DataProcessing
     /// </summary>
     public class CryptoCoarseFundamentalUniverseDataConverter
     {
-        private readonly string _market;
         private readonly string _baseFolder;
         private readonly string _destinationFolder;
 
@@ -45,11 +42,9 @@ namespace QuantConnect.DataProcessing
         /// <summary>
         /// Creates a new instance of <see cref="CryptoCoarseFundamental"/>
         /// </summary>
-        /// <param name="market">The data vendor market</param>
         /// <param name="baseFolder">The folder where the base data saved at</param>
-        public CryptoCoarseFundamentalUniverseDataConverter(string market, string baseFolder)
+        public CryptoCoarseFundamentalUniverseDataConverter(string baseFolder)
         {
-            _market = market;
             _baseFolder = baseFolder;
             _destinationFolder = Path.Combine(baseFolder, "fundamental", "coarse");
 
@@ -72,7 +67,7 @@ namespace QuantConnect.DataProcessing
                     var fileInfo = new FileInfo(file);
                     LeanData.TryParsePath(fileInfo.FullName, out var symbol, out _, out _);
 
-                    CurrencyPairUtil.DecomposeCurrencyPair(symbol, out var _, out var quoteCurrency);
+                    CurrencyPairUtil.DecomposeCurrencyPair(symbol, out _, out var quoteCurrency);
                     _quoteCurrency[symbol] = quoteCurrency;
 
                     _existingSecurities.Add(symbol, CreateSecurity(symbol, quoteCurrency));
@@ -113,7 +108,7 @@ namespace QuantConnect.DataProcessing
                         {
                             var volume = content[^1];
                             var rawUsdVol = GetUSDVolume(volume, _quoteCurrency[dataSymbol], _existingSecurities.Values.ToList());
-                            usdVol = rawUsdVol == null? null : (decimal?)Extensions.SmartRounding((decimal)rawUsdVol);
+                            usdVol = rawUsdVol == null? null : Extensions.SmartRounding((decimal)rawUsdVol);
                         }
                         catch
                         {
@@ -173,7 +168,7 @@ namespace QuantConnect.DataProcessing
         {
             var currencyConversion = SecurityCurrencyConversion.LinearSearch(
                 quoteCurrency,
-                "USD",
+                Currencies.USD,
                 existingSecurities,
                 new List<Symbol>(),
                 symbol => CreateSecurity(symbol, quoteCurrency));
