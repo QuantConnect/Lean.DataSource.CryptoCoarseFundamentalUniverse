@@ -17,6 +17,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using QuantConnect.Configuration;
 using QuantConnect.Data.Market;
 using QuantConnect.DataSource;
 using QuantConnect.Logging;
@@ -42,11 +43,12 @@ namespace QuantConnect.DataProcessing
         /// <summary>
         /// Creates a new instance of <see cref="CryptoCoarseFundamental"/>
         /// </summary>
-        /// <param name="baseFolder">The folder where the base data saved at</param>
-        public CryptoCoarseFundamentalUniverseDataConverter(string baseFolder)
+        /// <param name="market">The folder where the base data saved at</param>
+        public CryptoCoarseFundamentalUniverseDataConverter(string market)
         {
-            _baseFolder = baseFolder;
-            _destinationFolder = Path.Combine(baseFolder, "fundamental", "coarse");
+            _baseFolder = Path.Combine(Globals.DataFolder, "crypto", market, "daily");
+            _destinationFolder = Path.Combine(Config.Get("temp-output-directory", "/temp-output-directory"),
+                "crypto", market, "fundamental", "coarse");
 
             Directory.CreateDirectory(_destinationFolder);
         }
@@ -59,7 +61,7 @@ namespace QuantConnect.DataProcessing
             try
             {
                 // Get all trade data files in set crypto market data file
-                foreach(var file in Directory.GetFiles(Path.Combine(_baseFolder, "daily"), "*_trade.zip", SearchOption.AllDirectories))
+                foreach(var file in Directory.GetFiles(_baseFolder, "*_trade.zip", SearchOption.AllDirectories))
                 {
                     var dataReader = new LeanDataReader(file);
                     var baseData = dataReader.Parse();
