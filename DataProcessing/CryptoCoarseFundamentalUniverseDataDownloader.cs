@@ -67,6 +67,12 @@ namespace QuantConnect.DataProcessing
                     var fileInfo = new FileInfo(file);
                     LeanData.TryParsePath(fileInfo.FullName, out var symbol, out _, out _);
 
+                    if (!SymbolPropertiesDatabase.FromDataFolder().ContainsKey(symbol.ID.Market, symbol, symbol.SecurityType))
+                    {
+                        Log.Trace($"CryptoCoarseFundamentalUniverseDataConverter.ConvertToUniverseFile(): ignoring symbol {symbol}");
+                        continue;
+                    }
+
                     try
                     {
                         CurrencyPairUtil.DecomposeCurrencyPair(symbol, out _, out var quoteCurrency);
