@@ -37,7 +37,7 @@ namespace QuantConnect.DataProcessing
         private readonly string _destinationFolder;
 
         private Dictionary<Symbol, string> _quoteCurrency = new();
-        private Dictionary<string, Dictionary<Symbol, List<decimal?>>> _dataByDate = new();
+        private SortedDictionary<string, Dictionary<Symbol, List<decimal?>>> _dataByDate = new();
         private Dictionary<Symbol, Security> _existingSecurities = new();
 
         /// <summary>
@@ -96,16 +96,22 @@ namespace QuantConnect.DataProcessing
                 }
 
                 var errorsPerSymbol = new Dictionary<Symbol, List<string>>();
-                foreach (var date in _dataByDate.Keys)
+                foreach (var dataByDate in _dataByDate)
                 {
-                    var coarseByDate = _dataByDate[date];
+                    var date = dataByDate.Key;
+                    var coarseByDate = dataByDate.Value;
 
                     // Update all securities daily price for conversion
-                    foreach (var kvp in coarseByDate)
+                    foreach (var security in _existingSecurities.Values)
                     {
-                        if (_existingSecurities.TryGetValue(kvp.Key, out var security))
+                        if (coarseByDate.TryGetValue(security.Symbol, out var data))
                         {
-                            security.SetMarketPrice(new Tick { Value = (decimal)kvp.Value[^2] });
+                            security.SetMarketPrice(new Tick { Value = (decimal)data[^2] });
+                        }
+                        else
+                        {
+                            // if the security doesn't have price for this date clear it
+                            security.Cache.Reset();
                         }
                     }
 
@@ -120,7 +126,7 @@ namespace QuantConnect.DataProcessing
                         try
                         {
                             var volume = content[^1];
-                            var rawUsdVol = GetUSDVolume(volume, _quoteCurrency[dataSymbol], _existingSecurities.Values.ToList());
+                            var rawUsdVol = GetUSDVolume(volume, _quoteCurrency[dataSymbol], _existingSecurities.Values.Where(security => security.Price != 0).ToList());
                             usdVol = rawUsdVol == null? null : Extensions.SmartRounding((decimal)rawUsdVol);
                         }
                         catch
