@@ -37,7 +37,7 @@ namespace QuantConnect.DataProcessing
         private readonly string _destinationFolder;
 
         private Dictionary<Symbol, string> _quoteCurrency = new();
-        private Dictionary<string, Dictionary<Symbol, List<decimal?>>> _dataByDate = new();
+        private SortedDictionary<string, Dictionary<Symbol, List<decimal?>>> _dataByDate = new();
         private Dictionary<Symbol, Security> _existingSecurities = new();
 
         /// <summary>
@@ -58,22 +58,29 @@ namespace QuantConnect.DataProcessing
         /// </summary>
         public bool ConvertToUniverseFile()
         {
+            var start = DateTime.UtcNow;
             try
             {
                 // Get all trade data files in set crypto market data file
                 foreach(var file in Directory.GetFiles(_baseFolder, "*_trade.zip", SearchOption.AllDirectories))
                 {
-                    var dataReader = new LeanDataReader(file);
-                    var baseData = dataReader.Parse();
-
                     var fileInfo = new FileInfo(file);
                     LeanData.TryParsePath(fileInfo.FullName, out var symbol, out _, out _);
 
-                    CurrencyPairUtil.DecomposeCurrencyPair(symbol, out _, out var quoteCurrency);
-                    _quoteCurrency[symbol] = quoteCurrency;
+                    try
+                    {
+                        CurrencyPairUtil.DecomposeCurrencyPair(symbol, out _, out var quoteCurrency);
+                        _quoteCurrency[symbol] = quoteCurrency;
 
-                    _existingSecurities.Add(symbol, CreateSecurity(symbol, quoteCurrency));
+                        _existingSecurities.Add(symbol, CreateSecurity(symbol, quoteCurrency));
+                    }
+                    catch
+                    {
+                        // pass
+                    }
 
+                    var dataReader = new LeanDataReader(file);
+                    var baseData = dataReader.Parse();
                     foreach (TradeBar data in baseData)
                     {
                         var dateTime = data.EndTime;
@@ -88,14 +95,24 @@ namespace QuantConnect.DataProcessing
                     }
                 }
 
-                foreach (var date in _dataByDate.Keys)
+                var errorsPerSymbol = new Dictionary<Symbol, List<string>>();
+                foreach (var dataByDate in _dataByDate)
                 {
-                    var coarseByDate = _dataByDate[date];
+                    var date = dataByDate.Key;
+                    var coarseByDate = dataByDate.Value;
 
                     // Update all securities daily price for conversion
-                    foreach (var kvp in coarseByDate)
+                    foreach (var security in _existingSecurities.Values)
                     {
-                        _existingSecurities[kvp.Key].SetMarketPrice(new Tick { Value = (decimal)kvp.Value[^2] });
+                        if (coarseByDate.TryGetValue(security.Symbol, out var data))
+                        {
+                            security.SetMarketPrice(new Tick { Value = (decimal)data[^2] });
+                        }
+                        else
+                        {
+                            // if the security doesn't have price for this date clear it
+                            security.Cache.Reset();
+                        }
                     }
 
                     foreach (var kvp in coarseByDate)
@@ -109,12 +126,16 @@ namespace QuantConnect.DataProcessing
                         try
                         {
                             var volume = content[^1];
-                            var rawUsdVol = GetUSDVolume(volume, _quoteCurrency[dataSymbol], _existingSecurities.Values.ToList());
+                            var rawUsdVol = GetUSDVolume(volume, _quoteCurrency[dataSymbol], _existingSecurities.Values.Where(security => security.Price != 0).ToList());
                             usdVol = rawUsdVol == null? null : Extensions.SmartRounding((decimal)rawUsdVol);
                         }
                         catch
                         {
-                            Log.Trace($"No USD-{dataSymbol.Value} rate conversion available on {date}.");
+                            if (!errorsPerSymbol.TryGetValue(dataSymbol, out var errors))
+                            {
+                                errorsPerSymbol[dataSymbol] = errors = new List<string>();
+                            }
+                            errors.Add(date);
                         }
 
                         content.Add(usdVol);
@@ -126,21 +147,19 @@ namespace QuantConnect.DataProcessing
                             var sid = x.Key.ID;
                             return $"{sid},{sid.Symbol},{string.Join(",", x.Value)}";
                         })
-                        .ToList();
+                        .OrderBy(x => x.Split(',').First())
+                        .ToHashSet();
                     var finalPath = Path.Combine(_destinationFolder, $"{date}.csv");
-                    var finalFileExists = File.Exists(finalPath);
 
-                    var lines = new HashSet<string>(fileContent);
-                    if (finalFileExists)
-                    {
-                        foreach (var line in File.ReadAllLines(finalPath))
-                        {
-                            lines.Add(line);
-                        }
-                    }
+                    File.WriteAllLines(finalPath, fileContent);
 
-                    var finalLines = lines.OrderBy(x => x.Split(',').First());
-                    File.WriteAllLines(finalPath, finalLines);
+                    Log.Trace($"CryptoCoarseFundamentalUniverseDataConverter.ConvertToUniverseFile(): processed {date}");
+                }
+
+                foreach (var errors in errorsPerSymbol)
+                {
+                    Log.Trace("CryptoCoarseFundamentalUniverseDataConverter.ConvertToUniverseFile(): " +
+                              $"No USD-{errors.Key.ID.Symbol} rate conversion available on: [{string.Join(",", errors.Value)}].");
                 }
             }
             catch (Exception e)
@@ -149,7 +168,7 @@ namespace QuantConnect.DataProcessing
                 return false;
             }
 
-            Log.Trace($"CryptoCoarseFundamentalUniverseDataConverter.ConvertToUniverseFile(): Finished Processing");
+            Log.Trace($"CryptoCoarseFundamentalUniverseDataConverter.ConvertToUniverseFile(): Finished Processing. Took: {DateTime.UtcNow - start}");
             return true;
         }
 
