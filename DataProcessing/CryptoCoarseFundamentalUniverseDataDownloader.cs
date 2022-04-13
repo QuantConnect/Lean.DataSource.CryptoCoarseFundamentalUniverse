@@ -58,22 +58,29 @@ namespace QuantConnect.DataProcessing
         /// </summary>
         public bool ConvertToUniverseFile()
         {
+            var start = DateTime.UtcNow;
             try
             {
                 // Get all trade data files in set crypto market data file
                 foreach(var file in Directory.GetFiles(_baseFolder, "*_trade.zip", SearchOption.AllDirectories))
                 {
-                    var dataReader = new LeanDataReader(file);
-                    var baseData = dataReader.Parse();
-
                     var fileInfo = new FileInfo(file);
                     LeanData.TryParsePath(fileInfo.FullName, out var symbol, out _, out _);
 
-                    CurrencyPairUtil.DecomposeCurrencyPair(symbol, out _, out var quoteCurrency);
-                    _quoteCurrency[symbol] = quoteCurrency;
+                    try
+                    {
+                        CurrencyPairUtil.DecomposeCurrencyPair(symbol, out _, out var quoteCurrency);
+                        _quoteCurrency[symbol] = quoteCurrency;
 
-                    _existingSecurities.Add(symbol, CreateSecurity(symbol, quoteCurrency));
+                        _existingSecurities.Add(symbol, CreateSecurity(symbol, quoteCurrency));
+                    }
+                    catch
+                    {
+                        // pass
+                    }
 
+                    var dataReader = new LeanDataReader(file);
+                    var baseData = dataReader.Parse();
                     foreach (TradeBar data in baseData)
                     {
                         var dateTime = data.EndTime;
@@ -88,6 +95,7 @@ namespace QuantConnect.DataProcessing
                     }
                 }
 
+                var errorsPerSymbol = new Dictionary<Symbol, List<string>>();
                 foreach (var date in _dataByDate.Keys)
                 {
                     var coarseByDate = _dataByDate[date];
@@ -95,7 +103,10 @@ namespace QuantConnect.DataProcessing
                     // Update all securities daily price for conversion
                     foreach (var kvp in coarseByDate)
                     {
-                        _existingSecurities[kvp.Key].SetMarketPrice(new Tick { Value = (decimal)kvp.Value[^2] });
+                        if (_existingSecurities.TryGetValue(kvp.Key, out var security))
+                        {
+                            security.SetMarketPrice(new Tick { Value = (decimal)kvp.Value[^2] });
+                        }
                     }
 
                     foreach (var kvp in coarseByDate)
@@ -114,7 +125,11 @@ namespace QuantConnect.DataProcessing
                         }
                         catch
                         {
-                            Log.Trace($"No USD-{dataSymbol.Value} rate conversion available on {date}.");
+                            if (!errorsPerSymbol.TryGetValue(dataSymbol, out var errors))
+                            {
+                                errorsPerSymbol[dataSymbol] = errors = new List<string>();
+                            }
+                            errors.Add(date);
                         }
 
                         content.Add(usdVol);
@@ -126,21 +141,19 @@ namespace QuantConnect.DataProcessing
                             var sid = x.Key.ID;
                             return $"{sid},{sid.Symbol},{string.Join(",", x.Value)}";
                         })
-                        .ToList();
+                        .OrderBy(x => x.Split(',').First())
+                        .ToHashSet();
                     var finalPath = Path.Combine(_destinationFolder, $"{date}.csv");
-                    var finalFileExists = File.Exists(finalPath);
 
-                    var lines = new HashSet<string>(fileContent);
-                    if (finalFileExists)
-                    {
-                        foreach (var line in File.ReadAllLines(finalPath))
-                        {
-                            lines.Add(line);
-                        }
-                    }
+                    File.WriteAllLines(finalPath, fileContent);
 
-                    var finalLines = lines.OrderBy(x => x.Split(',').First());
-                    File.WriteAllLines(finalPath, finalLines);
+                    Log.Trace($"CryptoCoarseFundamentalUniverseDataConverter.ConvertToUniverseFile(): processed {date}");
+                }
+
+                foreach (var errors in errorsPerSymbol)
+                {
+                    Log.Trace("CryptoCoarseFundamentalUniverseDataConverter.ConvertToUniverseFile(): " +
+                              $"No USD-{errors.Key.ID.Symbol} rate conversion available on: [{string.Join(",", errors.Value)}].");
                 }
             }
             catch (Exception e)
@@ -149,7 +162,7 @@ namespace QuantConnect.DataProcessing
                 return false;
             }
 
-            Log.Trace($"CryptoCoarseFundamentalUniverseDataConverter.ConvertToUniverseFile(): Finished Processing");
+            Log.Trace($"CryptoCoarseFundamentalUniverseDataConverter.ConvertToUniverseFile(): Finished Processing. Took: {DateTime.UtcNow - start}");
             return true;
         }
 
