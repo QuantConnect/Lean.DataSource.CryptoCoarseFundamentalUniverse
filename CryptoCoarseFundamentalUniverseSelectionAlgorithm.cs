@@ -34,24 +34,27 @@ namespace QuantConnect.Algorithm.CSharp
         /// </summary>
         public override void Initialize()
         {
-            // Data ADDED via universe selection is added with Daily resolution.
-            UniverseSettings.Resolution = Resolution.Daily;
-
-            SetStartDate(2017, 2, 14);
-            SetEndDate(2017, 2, 18);
+            SetStartDate(2020, 6, 1);
+            SetEndDate(2020, 6, 5);
             SetCash(100000);
 
-            SetBrokerageModel(BrokerageName.Binance, AccountType.Cash);
+            SetBrokerageModel(BrokerageName.Bitfinex, AccountType.Margin);
 
+            // Warm up the security with the last known price to avoid conversion error
+            SetSecurityInitializer(security => security.SetMarketPrice(GetLastKnownPrice(security)));
+            
+            // Data ADDED via universe selection is added with Daily resolution.
+            UniverseSettings.Resolution = Resolution.Daily;
             // Add universe selection of cryptos based on coarse fundamentals
-            AddUniverse(new CryptoCoarseFundamentalUniverse(Market.Binance, UniverseSettings, UniverseSelectionFilter));
+            AddUniverse(new CryptoCoarseFundamentalUniverse(Market.Bitfinex, UniverseSettings, UniverseSelectionFilter));
         }
 
         private IEnumerable<Symbol> UniverseSelectionFilter(IEnumerable<CryptoCoarseFundamental> data)
         {
-            return from datum in data
+            return (from datum in data
                 where datum.Volume >= 100m && datum.VolumeInUsd > 10000m
-                select datum.Symbol;
+                orderby datum.VolumeInUsd descending
+                select datum.Symbol).Take(10);
         }
 
         /// <summary>

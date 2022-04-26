@@ -20,25 +20,31 @@ class CryptoCoarseFundamentalUniverseSelectionAlgorithm(QCAlgorithm):
     def Initialize(self):
         ''' Initialise the data and resolution required, as well as the cash and start-end dates for your algorithm. All algorithms must initialized. '''
 
-        # Data ADDED via universe selection is added with Daily resolution.
-        self.UniverseSettings.Resolution = Resolution.Daily
-
-        self.SetStartDate(2022, 2, 14)
-        self.SetEndDate(2022, 2, 18)
+        self.SetStartDate(2020, 6, 1)
+        self.SetEndDate(2020, 6, 5)
         self.SetCash(100000)
         
-        self.SetBrokerageModel(BrokerageName.Binance, AccountType.Cash)
+        self.SetBrokerageModel(BrokerageName.Bitfinex, AccountType.Cash)
+        
+        # Warm up the security with the last known price to avoid conversion error
+        self.SetSecurityInitializer(lambda security: security.SetMarketPrice(self.GetLastKnownPrice(security)));
 
+        # Data ADDED via universe selection is added with Daily resolution.
+        self.UniverseSettings.Resolution = Resolution.Daily
         # Add universe selection of cryptos based on coarse fundamentals
-        self.AddUniverse(CryptoCoarseFundamentalUniverse(Market.Binance, self.UniverseSettings, self.UniverseSelectionFilter))
+        self.AddUniverse(CryptoCoarseFundamentalUniverse(Market.Bitfinex, self.UniverseSettings, self.UniverseSelectionFilter))
 
     def UniverseSelectionFilter(self, data):
         ''' Selected the securities
         
         :param List of CryptoCoarseFundamentalUniverse data: List of CryptoCoarseFundamentalUniverse
         :return: List of Symbol objects '''
-        return [datum.Symbol for datum in data
-                if datum.Volume >= 100 and datum.VolumeInUsd > 10000]
+        filtered = [datum for datum in data
+                if datum.Volume >= 100 
+                and datum.VolumeInUsd > 10000]
+        sorted_by_volume_in_usd = sorted(filtered, key=lambda datum: datum.VolumeInUsd, reverse=True)[:10]
+        
+        return [datum.Symbol for datum in sorted_by_volume_in_usd]
 
     def OnSecuritiesChanged(self, changes):
         ''' Event fired each time that we add/remove securities from the data feed
