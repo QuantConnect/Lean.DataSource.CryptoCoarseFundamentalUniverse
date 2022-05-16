@@ -79,16 +79,14 @@ namespace QuantConnect.DataLibrary.Tests
             AssertAreEqual(expected, result);
         }
 
-        [Test]
-        [TestCase(1, "USD", 1)]
-        [TestCase(1, "ETH", 10)]
-        [TestCase(1, "BTC", 10)]
-        [TestCase(10, "LTC", 10)]
-        public void Selection(decimal volume, string quoteCurrency, decimal? result)
+        [TestCase(1, "USD", ExpectedResult=1d)]
+        [TestCase(1, "ETH", ExpectedResult=10d)]
+        [TestCase(10, "BTC", ExpectedResult=10d)]
+        [TestCase(1, "LTC", ExpectedResult=100d)]
+        public decimal? Selection(decimal volume, string quoteCurrency)
         {
             var expected = CryptoCoarseFundamentalUniverseDataConverter.GetUSDVolume(volume, quoteCurrency, _existingSecurities);
-
-            AssertAreEqual(expected, result);
+            return expected;
         }
 
         private void AssertAreEqual(object expected, object result, bool filterByCustomAttributes = false)
