@@ -132,7 +132,8 @@ namespace QuantConnect.DataProcessing
                         try
                         {
                             var volume = content[^1];
-                            var rawUsdVol = GetUSDVolume(volume, _quoteCurrency[dataSymbol], _existingSecurities.Values.Where(security => security.Price != 0).ToList());
+                            var price = content[^2];
+                            var rawUsdVol = GetUSDVolume(volume * price, _quoteCurrency[dataSymbol], _existingSecurities.Values.Where(security => security.Price != 0).ToList());
                             usdVol = rawUsdVol == null? null : Extensions.SmartRounding((decimal)rawUsdVol);
                         }
                         catch
@@ -181,14 +182,14 @@ namespace QuantConnect.DataProcessing
         /// <summary>
         /// Helper method to get USD volume from quote currency-intermittent pair
         /// </summary>
-        /// <param name="baseVolume">The volume of symbol at date in quote currency</param>
+        /// <param name="quoteVolume">The volume of symbol at date in quote currency</param>
         /// <param name="quoteCurrency">The quote currency of the Symbol</param>
         /// <param name="existingSecurities">List of existing securities available to exchange rate</param>
         /// <return>
         /// Volume in USD
         /// </return>
         public static decimal? GetUSDVolume(
-            decimal? baseVolume,
+            decimal? quoteVolume,
             string quoteCurrency,
             List<Security> existingSecurities
         )
@@ -201,7 +202,7 @@ namespace QuantConnect.DataProcessing
                 symbol => CreateSecurity(symbol, quoteCurrency));
             var conversionRate = currencyConversion.Update();
 
-            decimal? usdVol = baseVolume * conversionRate;
+            decimal? usdVol = quoteVolume * conversionRate;
 
             return usdVol;
         }
