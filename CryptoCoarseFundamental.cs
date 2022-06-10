@@ -115,7 +115,7 @@ namespace QuantConnect.DataSource
             return new CryptoCoarseFundamental
             {
                 Symbol = new Symbol(SecurityIdentifier.Parse(csv[0]), csv[1]),
-                Time = date,
+                Time = date - _period,
 
                 Open = decimal.Parse(csv[2], NumberStyles.Any, CultureInfo.InvariantCulture),
                 High = decimal.Parse(csv[3], NumberStyles.Any, CultureInfo.InvariantCulture),
