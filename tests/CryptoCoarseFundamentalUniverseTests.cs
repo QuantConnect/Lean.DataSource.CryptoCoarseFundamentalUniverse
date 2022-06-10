@@ -15,13 +15,9 @@
 */
 
 using System;
-using ProtoBuf;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using ProtoBuf.Meta;
 using Newtonsoft.Json;
-using NodaTime;
 using NUnit.Framework;
 using QuantConnect.Data;
 using QuantConnect.DataProcessing;

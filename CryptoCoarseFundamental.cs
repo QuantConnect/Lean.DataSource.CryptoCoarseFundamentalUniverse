@@ -19,7 +19,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using NodaTime;
-using ProtoBuf;
 using QuantConnect.Data;
 
 namespace QuantConnect.DataSource
@@ -27,52 +26,46 @@ namespace QuantConnect.DataSource
     /// <summary>
     /// Crypto Coarse Fundamental object for crpyto universe selection
     /// </summary>
-    [ProtoContract(SkipConstructor = true)]
     public class CryptoCoarseFundamental : BaseData
     {
-        /// <summary>
+        private static readonly TimeSpan _period = TimeSpan.FromDays(1);
+
+       /// <summary>
         /// Daily Open Price (UTC 00:00)
         /// </summary>
-        [ProtoMember(11)]
         public decimal Open { get; set; }
 
         /// <summary>
         /// Daily High Price
         /// </summary>
-        [ProtoMember(12)]
         public decimal High { get; set; }
 
         /// <summary>
         /// Daily Low Price
         /// </summary>
-        [ProtoMember(13)]
         public decimal Low { get; set; }
 
         /// <summary>
         /// Daily Close Price
         /// </summary>
-        [ProtoMember(14)]
         public decimal Close { get; set; }
 
         /// <summary>
         /// Daily Trade Volume
         /// Note that this only includes the volume traded in the selected market
         /// </summary>
-        [ProtoMember(15)]
         public decimal Volume { get; set; }
 
         /// <summary>
         /// Daily Volume in Quote Currency
         /// Note that this only includes the volume traded in the selected market
         /// </summary>
-        [ProtoMember(16)]
         public decimal VolumeInQuoteCurrency { get; set; }
 
         /// <summary>
         /// Daily Volume in USD
         /// Note that this only includes the volume traded in the selected market
         /// </summary>
-        [ProtoMember(17)]
         public decimal? VolumeInUsd { get; set; }
 
         /// <summary>
@@ -80,12 +73,7 @@ namespace QuantConnect.DataSource
         /// </summary>
         public decimal Price => Close;
 
-        /// <summary>
-        /// Time passed between the date of the data and the time the data became available to us
-        /// </summary>
-        private TimeSpan _period = TimeSpan.FromDays(1);
-
-        /// <summary>
+         /// <summary>
         /// Time the data became available
         /// </summary>
         public override DateTime EndTime => Time + _period;
@@ -127,7 +115,7 @@ namespace QuantConnect.DataSource
             return new CryptoCoarseFundamental
             {
                 Symbol = new Symbol(SecurityIdentifier.Parse(csv[0]), csv[1]),
-                Time = date - _period,
+                Time = date,
 
                 Open = decimal.Parse(csv[2], NumberStyles.Any, CultureInfo.InvariantCulture),
                 High = decimal.Parse(csv[3], NumberStyles.Any, CultureInfo.InvariantCulture),
