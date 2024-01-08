@@ -200,9 +200,9 @@ namespace QuantConnect.DataProcessing
                 existingSecurities,
                 new List<Symbol>(),
                 symbol => CreateSecurity(symbol, quoteCurrency));
-            var conversionRate = currencyConversion.Update();
+            currencyConversion.Update();
 
-            decimal? usdVol = quoteVolume * conversionRate;
+            decimal? usdVol = quoteVolume * currencyConversion.ConversionRate;
 
             return usdVol;
         }
