@@ -16,7 +16,7 @@ from AlgorithmImports import *
 ### <summary>
 ### Example algorithm using the custom data type as a source of alpha
 ### </summary>
-class CryptoCoarseFundamentalUniverseSelectionAlgorithm(QCAlgorithm): 
+class CryptoCoarseFundamentalUniverseSelectionAlgorithm(QCAlgorithm):
     def Initialize(self):
         ''' Initialise the data and resolution required, as well as the cash and start-end dates for your algorithm. All algorithms must initialized. '''
 
@@ -32,7 +32,15 @@ class CryptoCoarseFundamentalUniverseSelectionAlgorithm(QCAlgorithm):
         # Data ADDED via universe selection is added with Daily resolution.
         self.UniverseSettings.Resolution = Resolution.Daily
         # Add universe selection of cryptos based on coarse fundamentals
-        self.AddUniverse(CryptoCoarseFundamentalUniverse(Market.Bitfinex, self.UniverseSettings, self.UniverseSelectionFilter))
+        universe = self.AddUniverse(CryptoCoarseFundamentalUniverse(Market.Bitfinex, self.UniverseSettings, self.UniverseSelectionFilter))
+
+        history = self.History(universe, TimeSpan(2, 0, 0, 0))
+        if len(history) != 2:
+            raise ValueError(f"Unexpected history count {len(history)}! Expected 2")
+
+        for dataForDate in history:
+            if len(dataForDate) < 100:
+                raise ValueError(f"Unexpected historical universe data!")
 
     def UniverseSelectionFilter(self, data):
         ''' Selected the securities
@@ -48,7 +56,7 @@ class CryptoCoarseFundamentalUniverseSelectionAlgorithm(QCAlgorithm):
 
     def OnSecuritiesChanged(self, changes):
         ''' Event fired each time that we add/remove securities from the data feed
-		
+
         :param SecurityChanges changes: Security additions/removals for this time step
         '''
         self.Log(changes.ToString())

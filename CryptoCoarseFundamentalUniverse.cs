@@ -14,11 +14,10 @@
 */
 
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using Python.Runtime;
-using QuantConnect.Securities;
 using QuantConnect.DataSource;
+using System.Collections.Generic;
 
 namespace QuantConnect.Data.UniverseSelection
 {

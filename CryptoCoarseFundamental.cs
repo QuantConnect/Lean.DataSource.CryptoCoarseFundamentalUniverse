@@ -20,13 +20,14 @@ using System.Globalization;
 using System.IO;
 using NodaTime;
 using QuantConnect.Data;
+using QuantConnect.Data.UniverseSelection;
 
 namespace QuantConnect.DataSource
 {
     /// <summary>
     /// Crypto Coarse Fundamental object for crpyto universe selection
     /// </summary>
-    public class CryptoCoarseFundamental : BaseData
+    public class CryptoCoarseFundamental : BaseDataCollection
     {
         private static readonly TimeSpan _period = TimeSpan.FromDays(1);
 
@@ -96,7 +97,8 @@ namespace QuantConnect.DataSource
                     "coarse",
                     $"{date:yyyyMMdd}.csv"
                 ),
-                SubscriptionTransportMedium.LocalFile
+                SubscriptionTransportMedium.LocalFile,
+                FileFormat.FoldingCollection
             );
         }
 
@@ -159,7 +161,8 @@ namespace QuantConnect.DataSource
                 Open = Open,
                 High = High,
                 Low = Low,
-                Close = Close
+                Close = Close,
+                Data = Data
             };
         }
 
