@@ -27,7 +27,7 @@ namespace QuantConnect.DataSource
     /// <summary>
     /// Crypto Coarse Fundamental object for crpyto universe selection
     /// </summary>
-    public class CryptoCoarseFundamental : BaseDataCollection
+    public class CryptoUniverse : BaseDataCollection
     {
         private static readonly TimeSpan _period = TimeSpan.FromDays(1);
 
@@ -114,7 +114,7 @@ namespace QuantConnect.DataSource
         {
             var csv = line.Split(',');
 
-            return new CryptoCoarseFundamental
+            return new CryptoUniverse
             {
                 Symbol = new Symbol(SecurityIdentifier.Parse(csv[0]), csv[1]),
                 Time = date,
@@ -150,7 +150,7 @@ namespace QuantConnect.DataSource
         /// <returns>A clone of the object</returns>
         public override BaseData Clone()
         {
-            return new CryptoCoarseFundamental
+            return new CryptoUniverse
             {
                 Symbol = Symbol,
                 Time = Time,

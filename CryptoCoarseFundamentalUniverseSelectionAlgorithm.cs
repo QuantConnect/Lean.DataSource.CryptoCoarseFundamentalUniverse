@@ -46,7 +46,7 @@ namespace QuantConnect.Algorithm.CSharp
             // Data ADDED via universe selection is added with Daily resolution.
             UniverseSettings.Resolution = Resolution.Daily;
             // Add universe selection of cryptos based on coarse fundamentals
-            var universe = AddUniverse(new CryptoCoarseFundamentalUniverse(Market.Bitfinex, UniverseSettings, UniverseSelectionFilter));
+            var universe = AddUniverse(new CryptoUniverseConfig(Market.Bitfinex, UniverseSettings, UniverseSelectionFilter));
 
             var history = History(universe, 2).ToList();
             if (history.Count != 2)
@@ -63,7 +63,7 @@ namespace QuantConnect.Algorithm.CSharp
             }
         }
 
-        private IEnumerable<Symbol> UniverseSelectionFilter(IEnumerable<CryptoCoarseFundamental> data)
+        private IEnumerable<Symbol> UniverseSelectionFilter(IEnumerable<CryptoUniverse> data)
         {
             return (from datum in data
                     where datum.Volume >= 100m && datum.VolumeInUsd > 10000m
