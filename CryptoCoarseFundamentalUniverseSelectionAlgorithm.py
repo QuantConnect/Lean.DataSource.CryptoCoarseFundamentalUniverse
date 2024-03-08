@@ -32,7 +32,7 @@ class CryptoCoarseFundamentalUniverseSelectionAlgorithm(QCAlgorithm):
         # Data ADDED via universe selection is added with Daily resolution.
         self.UniverseSettings.Resolution = Resolution.Daily
         # Add universe selection of cryptos based on coarse fundamentals
-        universe = self.AddUniverse(CryptoUniverseConfig(Market.Bitfinex, self.UniverseSettings, self.UniverseSelectionFilter))
+        universe = self.AddUniverse(CryptoUniverse.Bitfinex(self.UniverseSelectionFilter))
 
         history = self.History(universe, TimeSpan(2, 0, 0, 0))
         if len(history) != 2:
@@ -45,7 +45,7 @@ class CryptoCoarseFundamentalUniverseSelectionAlgorithm(QCAlgorithm):
     def UniverseSelectionFilter(self, data):
         ''' Selected the securities
         
-        :param List of CryptoUniverseConfig data: List of CryptoUniverseConfig
+        :param List of CryptoUniverse data: List of CryptoUniverse
         :return: List of Symbol objects '''
         filtered = [datum for datum in data
                 if datum.Volume >= 100 
