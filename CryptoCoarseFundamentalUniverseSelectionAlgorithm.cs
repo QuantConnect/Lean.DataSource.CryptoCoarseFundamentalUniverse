@@ -42,19 +42,33 @@ namespace QuantConnect.Algorithm.CSharp
 
             // Warm up the security with the last known price to avoid conversion error
             SetSecurityInitializer(security => security.SetMarketPrice(GetLastKnownPrice(security)));
-            
+
             // Data ADDED via universe selection is added with Daily resolution.
             UniverseSettings.Resolution = Resolution.Daily;
             // Add universe selection of cryptos based on coarse fundamentals
-            AddUniverse(new CryptoCoarseFundamentalUniverse(Market.Bitfinex, UniverseSettings, UniverseSelectionFilter));
+            var universe = AddUniverse(CryptoUniverse.Bitfinex(UniverseSelectionFilter));
+
+            var history = History(universe, 2).ToList();
+            if (history.Count != 2)
+            {
+                throw new Exception($"Unexpected historical data count!");
+            }
+            foreach (var dataForDate in history)
+            {
+                var coarseData = dataForDate.ToList();
+                if (coarseData.Count < 100)
+                {
+                    throw new Exception($"Unexpected historical universe data!");
+                }
+            }
         }
 
-        private IEnumerable<Symbol> UniverseSelectionFilter(IEnumerable<CryptoCoarseFundamental> data)
+        private IEnumerable<Symbol> UniverseSelectionFilter(IEnumerable<CryptoUniverse> data)
         {
             return (from datum in data
-                where datum.Volume >= 100m && datum.VolumeInUsd > 10000m
-                orderby datum.VolumeInUsd descending
-                select datum.Symbol).Take(10);
+                    where datum.Volume >= 100m && datum.VolumeInUsd > 10000m
+                    orderby datum.VolumeInUsd descending
+                    select datum.Symbol).Take(10);
         }
 
         /// <summary>
