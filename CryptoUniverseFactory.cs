@@ -24,6 +24,12 @@ namespace QuantConnect.Data.UniverseSelection
     /// <summary>
     /// Defines a universe that reads crypto coarse data
     /// </summary>
+    [Obsolete("'CryptoCoarseFundamentalUniverse' was renamed to 'CryptoUniverseFactory'")]
+    public class CryptoCoarseFundamentalUniverse : CryptoUniverseFactory {}
+
+    /// <summary>
+    /// Defines a universe that reads crypto coarse data
+    /// </summary>
     public class CryptoUniverseFactory : Universe
     {
         private static readonly CryptoUniverse _symbolFactory = new();
