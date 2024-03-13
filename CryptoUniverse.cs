@@ -25,6 +25,9 @@ using QuantConnect.Data.UniverseSelection;
 
 namespace QuantConnect.DataSource
 {
+    [Obsolete("'CryptoCoarseFundamental' was renamed to 'CryptoUniverse'")]
+    public class CryptoCoarseFundamental : CryptoUniverse {}
+
     /// <summary>
     /// Crypto Coarse Fundamental object for crpyto universe selection
     /// </summary>

@@ -25,7 +25,17 @@ namespace QuantConnect.Data.UniverseSelection
     /// Defines a universe that reads crypto coarse data
     /// </summary>
     [Obsolete("'CryptoCoarseFundamentalUniverse' was renamed to 'CryptoUniverseFactory'")]
-    public class CryptoCoarseFundamentalUniverse : CryptoUniverseFactory {}
+    public class CryptoCoarseFundamentalUniverse : CryptoUniverseFactory
+    {
+        public CryptoCoarseFundamentalUniverse(string market, UniverseSettings universeSettings, Func<IEnumerable<CryptoUniverse>, IEnumerable<Symbol>> selector)
+            : base(market, universeSettings, selector)
+        {
+        }
+        public CryptoCoarseFundamentalUniverse(string market, UniverseSettings universeSettings, PyObject selector)
+            : base(market, universeSettings, selector)
+        {
+        }
+    }
 
     /// <summary>
     /// Defines a universe that reads crypto coarse data

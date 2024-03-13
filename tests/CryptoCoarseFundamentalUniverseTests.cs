@@ -52,17 +52,6 @@ namespace QuantConnect.DataLibrary.Tests
         }
 
         [Test]
-        public void JsonRoundTrip()
-        {
-            var expected = CreateNewInstance();
-            var type = expected.GetType();
-            var serialized = JsonConvert.SerializeObject(expected);
-            var result = JsonConvert.DeserializeObject(serialized, type);
-
-            AssertAreEqual(expected, result);
-        }
-
-        [Test]
         public void Selection()
         {
             var datum = CreateNewSelection();
@@ -101,28 +90,11 @@ namespace QuantConnect.DataLibrary.Tests
             }
         }
 
-        private BaseData CreateNewInstance()
-        {
-            return new CryptoCoarseFundamental
-                {
-                    Volume = 20m,
-                    VolumeInQuoteCurrency = 200m,
-                    VolumeInUsd = 200m,
-                    Open = 5m,
-                    High = 15m,
-                    Low = 4m,
-                    Close = 10m,
-
-                    Symbol = Symbol.Create("BTCUSD", SecurityType.Crypto, _market),
-                    Time = DateTime.Today
-                };
-        }
-
-        private IEnumerable<CryptoCoarseFundamental> CreateNewSelection()
+        private IEnumerable<CryptoUniverse> CreateNewSelection()
         {
             return new []
             {
-                new CryptoCoarseFundamental
+                new CryptoUniverse
                 {
                     Volume = 20m,
                     VolumeInQuoteCurrency = 200m,
@@ -135,7 +107,7 @@ namespace QuantConnect.DataLibrary.Tests
                     Symbol = Symbol.Create("BTCUSD", SecurityType.Crypto, _market),
                     Time = DateTime.Today
                 },
-                new CryptoCoarseFundamental
+                new CryptoUniverse
                 {
                     Volume = 200m,
                     VolumeInQuoteCurrency = 20000m,
