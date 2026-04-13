@@ -17,46 +17,45 @@ from AlgorithmImports import *
 ### Example algorithm using the custom data type as a source of alpha
 ### </summary>
 class CryptoCoarseFundamentalUniverseSelectionAlgorithm(QCAlgorithm):
-    def Initialize(self):
+    def initialize(self):
         ''' Initialise the data and resolution required, as well as the cash and start-end dates for your algorithm. All algorithms must initialized. '''
-
-        self.SetStartDate(2020, 6, 1)
-        self.SetEndDate(2020, 6, 5)
-        self.SetCash(100000)
+        self.set_start_date(2020, 6, 1)
+        self.set_end_date(2020, 6, 5)
+        self.set_cash(100000)
         
-        self.SetBrokerageModel(BrokerageName.Bitfinex, AccountType.Cash)
+        self.set_brokerage_model(BrokerageName.BITFINEX, AccountType.CASH)
         
         # Warm up the security with the last known price to avoid conversion error
-        self.SetSecurityInitializer(lambda security: security.SetMarketPrice(self.GetLastKnownPrice(security)));
+        self.set_security_initializer(BrokerageModelSecurityInitializer(self.brokerage_model, FuncSecuritySeeder(self.get_last_known_prices)));
 
         # Data ADDED via universe selection is added with Daily resolution.
-        self.UniverseSettings.Resolution = Resolution.Daily
+        self.universe_settings.resolution = Resolution.DAILY
         # Add universe selection of cryptos based on coarse fundamentals
-        universe = self.AddUniverse(CryptoUniverse.Bitfinex(self.UniverseSelectionFilter))
+        universe = self.add_universe(CryptoUniverse.bitfinex(self._universe_selection_filter))
 
-        history = self.History(universe, TimeSpan(2, 0, 0, 0))
+        history = self.history(universe, timedelta(2))
         if len(history) != 2:
             raise ValueError(f"Unexpected history count {len(history)}! Expected 2")
 
-        for dataForDate in history:
-            if len(dataForDate) < 100:
+        for data_for_date in history:
+            if len(data_for_date) < 100:
                 raise ValueError(f"Unexpected historical universe data!")
 
-    def UniverseSelectionFilter(self, data):
+    def _universe_selection_filter(self, data):
         ''' Selected the securities
         
         :param List of CryptoUniverse data: List of CryptoUniverse
         :return: List of Symbol objects '''
         filtered = [datum for datum in data
-                if datum.Volume >= 100 
-                and datum.VolumeInUsd > 10000]
-        sorted_by_volume_in_usd = sorted(filtered, key=lambda datum: datum.VolumeInUsd, reverse=True)[:10]
+                if datum.volume >= 100 
+                and datum.volume_in_usd > 10000]
+        sorted_by_volume_in_usd = sorted(filtered, key=lambda datum: datum.volume_in_usd, reverse=True)[:10]
         
-        return [datum.Symbol for datum in sorted_by_volume_in_usd]
+        return [datum.symbol for datum in sorted_by_volume_in_usd]
 
-    def OnSecuritiesChanged(self, changes):
+    def on_securities_changed(self, changes):
         ''' Event fired each time that we add/remove securities from the data feed
 
         :param SecurityChanges changes: Security additions/removals for this time step
         '''
-        self.Log(changes.ToString())
+        self.log(str(changes))

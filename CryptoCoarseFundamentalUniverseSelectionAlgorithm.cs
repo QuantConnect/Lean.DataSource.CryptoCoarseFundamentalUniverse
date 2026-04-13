@@ -18,7 +18,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using QuantConnect.Brokerages;
-using QuantConnect.Data;
+using QuantConnect.Securities;
 using QuantConnect.Data.UniverseSelection;
 using QuantConnect.DataSource;
 
@@ -41,7 +41,7 @@ namespace QuantConnect.Algorithm.CSharp
             SetBrokerageModel(BrokerageName.Bitfinex, AccountType.Margin);
 
             // Warm up the security with the last known price to avoid conversion error
-            SetSecurityInitializer(security => security.SetMarketPrice(GetLastKnownPrice(security)));
+            SetSecurityInitializer(new BrokerageModelSecurityInitializer(BrokerageModel, new FuncSecuritySeeder(GetLastKnownPrices)));
 
             // Data ADDED via universe selection is added with Daily resolution.
             UniverseSettings.Resolution = Resolution.Daily;
